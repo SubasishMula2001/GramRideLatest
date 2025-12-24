@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Users, Package, IndianRupee, Clock, MapPin, Navigation, Loader2, CheckCircle, Car, Phone, User, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import GramRideLogo from '@/components/GramRideLogo';
 import BookingTypeCard from '@/components/BookingTypeCard';
-import LocationInput from '@/components/LocationInput';
+import GooglePlaceInput from '@/components/GooglePlaceInput';
+import RouteMap from '@/components/RouteMap';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -20,24 +21,35 @@ interface DriverInfo {
   rating: number;
 }
 
+interface LocationData {
+  address: string;
+  lat?: number;
+  lng?: number;
+}
+
 const BookRide = () => {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
   
   const [bookingType, setBookingType] = useState<BookingType>(null);
   const [step, setStep] = useState<BookingStep>('type');
-  const [pickup, setPickup] = useState('');
-  const [drop, setDrop] = useState('');
+  const [pickupData, setPickupData] = useState<LocationData>({ address: '' });
+  const [dropData, setDropData] = useState<LocationData>({ address: '' });
   const [loading, setLoading] = useState(false);
   const [rideId, setRideId] = useState<string | null>(null);
   const [driverInfo, setDriverInfo] = useState<DriverInfo | null>(null);
   
-  // Estimated values
-  const estimatedDistance = 3.5;
-  const estimatedTime = 12;
+  // Route calculated values
+  const [estimatedDistance, setEstimatedDistance] = useState(3.5);
+  const [estimatedTime, setEstimatedTime] = useState(12);
   const baseFare = bookingType === 'passenger' ? 20 : 30;
   const perKmRate = bookingType === 'passenger' ? 8 : 12;
   const estimatedFare = Math.round(baseFare + (estimatedDistance * perKmRate));
+
+  const handleRouteCalculated = useCallback((distance: number, duration: number) => {
+    setEstimatedDistance(Math.round(distance * 10) / 10);
+    setEstimatedTime(duration);
+  }, []);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -118,7 +130,7 @@ const BookRide = () => {
   };
 
   const handleLocationSubmit = () => {
-    if (pickup && drop) {
+    if (pickupData.address && dropData.address) {
       setStep('confirm');
     }
   };
@@ -137,8 +149,12 @@ const BookRide = () => {
         .insert({
           user_id: user.id,
           ride_type: bookingType,
-          pickup_location: pickup,
-          dropoff_location: drop,
+          pickup_location: pickupData.address,
+          dropoff_location: dropData.address,
+          pickup_lat: pickupData.lat,
+          pickup_lng: pickupData.lng,
+          dropoff_lat: dropData.lat,
+          dropoff_lng: dropData.lng,
           fare: estimatedFare,
           distance_km: estimatedDistance,
           duration_mins: estimatedTime,
@@ -160,8 +176,8 @@ const BookRide = () => {
         details: { 
           ride_id: data.id, 
           ride_type: bookingType,
-          pickup: pickup,
-          drop: drop,
+          pickup: pickupData.address,
+          drop: dropData.address,
           fare: estimatedFare 
         }
       });
@@ -244,12 +260,12 @@ const BookRide = () => {
                 </div>
               </div>
 
-              <div className="space-y-4 mb-8">
-                <LocationInput
+              <div className="space-y-4 mb-6">
+                <GooglePlaceInput
                   type="pickup"
-                  value={pickup}
-                  onChange={setPickup}
-                  placeholder="Enter pickup location"
+                  value={pickupData.address}
+                  onChange={(address, lat, lng) => setPickupData({ address, lat, lng })}
+                  placeholder="Search pickup location"
                 />
                 
                 <div className="flex items-center justify-center">
@@ -260,11 +276,22 @@ const BookRide = () => {
                   </div>
                 </div>
                 
-                <LocationInput
+                <GooglePlaceInput
                   type="drop"
-                  value={drop}
-                  onChange={setDrop}
-                  placeholder="Enter drop location"
+                  value={dropData.address}
+                  onChange={(address, lat, lng) => setDropData({ address, lat, lng })}
+                  placeholder="Search drop location"
+                />
+              </div>
+
+              {/* Route Map */}
+              <div className="mb-6">
+                <RouteMap
+                  pickupLat={pickupData.lat}
+                  pickupLng={pickupData.lng}
+                  dropLat={dropData.lat}
+                  dropLng={dropData.lng}
+                  onRouteCalculated={handleRouteCalculated}
                 />
               </div>
 
@@ -273,7 +300,7 @@ const BookRide = () => {
                 size="xl" 
                 className="w-full"
                 onClick={handleLocationSubmit}
-                disabled={!pickup || !drop}
+                disabled={!pickupData.address || !dropData.address}
               >
                 Find Toto
               </Button>
@@ -310,7 +337,7 @@ const BookRide = () => {
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground font-medium uppercase">Pickup</p>
-                      <p className="text-foreground font-medium">{pickup}</p>
+                      <p className="text-foreground font-medium">{pickupData.address}</p>
                     </div>
                   </div>
                   
@@ -320,7 +347,7 @@ const BookRide = () => {
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground font-medium uppercase">Drop</p>
-                      <p className="text-foreground font-medium">{drop}</p>
+                      <p className="text-foreground font-medium">{dropData.address}</p>
                     </div>
                   </div>
                 </div>
@@ -384,11 +411,11 @@ const BookRide = () => {
               <div className="bg-gradient-card rounded-2xl border border-border/50 p-6 text-left">
                 <div className="flex items-center gap-3 mb-4">
                   <Navigation className="w-5 h-5 text-primary" />
-                  <span className="text-foreground">{pickup}</span>
+                  <span className="text-foreground">{pickupData.address}</span>
                 </div>
                 <div className="flex items-center gap-3">
                   <MapPin className="w-5 h-5 text-secondary" />
-                  <span className="text-foreground">{drop}</span>
+                  <span className="text-foreground">{dropData.address}</span>
                 </div>
               </div>
             </div>
@@ -465,11 +492,11 @@ const BookRide = () => {
                     <div className="mt-4 space-y-2">
                       <div className="flex items-center gap-2 text-sm">
                         <Navigation className="w-4 h-4 text-primary" />
-                        <span className="text-foreground">{pickup}</span>
+                        <span className="text-foreground">{pickupData.address}</span>
                       </div>
                       <div className="flex items-center gap-2 text-sm">
                         <MapPin className="w-4 h-4 text-secondary" />
-                        <span className="text-foreground">{drop}</span>
+                        <span className="text-foreground">{dropData.address}</span>
                       </div>
                     </div>
 
@@ -522,11 +549,11 @@ const BookRide = () => {
                     <div className="space-y-2">
                       <div className="flex items-center gap-2 text-sm">
                         <Navigation className="w-4 h-4 text-primary" />
-                        <span className="text-foreground">{pickup}</span>
+                        <span className="text-foreground">{pickupData.address}</span>
                       </div>
                       <div className="flex items-center gap-2 text-sm">
                         <MapPin className="w-4 h-4 text-secondary" />
-                        <span className="text-foreground">{drop}</span>
+                        <span className="text-foreground">{dropData.address}</span>
                       </div>
                     </div>
 
@@ -570,11 +597,11 @@ const BookRide = () => {
                 )}
                 <div className="flex items-center gap-3 mb-4">
                   <Navigation className="w-5 h-5 text-primary" />
-                  <span className="text-foreground">{pickup}</span>
+                  <span className="text-foreground">{pickupData.address}</span>
                 </div>
                 <div className="flex items-center gap-3 mb-4">
                   <MapPin className="w-5 h-5 text-secondary" />
-                  <span className="text-foreground">{drop}</span>
+                  <span className="text-foreground">{dropData.address}</span>
                 </div>
                 <div className="border-t border-border pt-4 flex items-center justify-between">
                   <span className="text-muted-foreground">Total Fare Paid</span>
