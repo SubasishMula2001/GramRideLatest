@@ -53,7 +53,7 @@ const Login = () => {
     } else if (userRole === 'driver') {
       navigate('/driver');
     } else {
-      navigate('/');
+      navigate('/book');
     }
   };
 

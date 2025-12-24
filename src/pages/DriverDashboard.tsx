@@ -16,12 +16,14 @@ import {
   CheckCircle,
   Phone,
   Package,
-  Car
+  Car,
+  CircleDot
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import GramRideLogo from '@/components/GramRideLogo';
 import RideCard from '@/components/RideCard';
+import RouteMap from '@/components/RouteMap';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -34,6 +36,10 @@ interface PendingRide {
   fare: number;
   distance_km: number;
   user_id: string;
+  pickup_lat?: number;
+  pickup_lng?: number;
+  dropoff_lat?: number;
+  dropoff_lng?: number;
 }
 
 interface ActiveRide {
@@ -45,6 +51,10 @@ interface ActiveRide {
   distance_km: number;
   status: 'accepted' | 'in_progress';
   user_name: string | null;
+  pickup_lat?: number;
+  pickup_lng?: number;
+  dropoff_lat?: number;
+  dropoff_lng?: number;
 }
 
 interface DriverData {
@@ -153,7 +163,11 @@ const DriverDashboard = () => {
           dropoff_location,
           fare,
           distance_km,
-          user_id
+          user_id,
+          pickup_lat,
+          pickup_lng,
+          dropoff_lat,
+          dropoff_lng
         `)
         .eq('status', 'pending')
         .order('created_at', { ascending: false });
@@ -180,7 +194,11 @@ const DriverDashboard = () => {
           fare,
           distance_km,
           status,
-          user_id
+          user_id,
+          pickup_lat,
+          pickup_lng,
+          dropoff_lat,
+          dropoff_lng
         `)
         .eq('driver_id', driverData.id)
         .in('status', ['accepted', 'in_progress'])
@@ -211,7 +229,11 @@ const DriverDashboard = () => {
           fare: data.fare || 0,
           distance_km: data.distance_km || 0,
           status: data.status as 'accepted' | 'in_progress',
-          user_name: userName
+          user_name: userName,
+          pickup_lat: data.pickup_lat,
+          pickup_lng: data.pickup_lng,
+          dropoff_lat: data.dropoff_lat,
+          dropoff_lng: data.dropoff_lng
         });
       } else {
         setActiveRide(null);
@@ -271,7 +293,11 @@ const DriverDashboard = () => {
           dropoff_location,
           fare,
           distance_km,
-          user_id
+          user_id,
+          pickup_lat,
+          pickup_lng,
+          dropoff_lat,
+          dropoff_lng
         `)
         .eq('id', rideId)
         .single();
@@ -318,7 +344,11 @@ const DriverDashboard = () => {
         fare: rideData.fare || 0,
         distance_km: rideData.distance_km || 0,
         status: 'accepted',
-        user_name: userName
+        user_name: userName,
+        pickup_lat: rideData.pickup_lat,
+        pickup_lng: rideData.pickup_lng,
+        dropoff_lat: rideData.dropoff_lat,
+        dropoff_lng: rideData.dropoff_lng
       });
 
       // Update driver stats
@@ -509,13 +539,23 @@ const DriverDashboard = () => {
                     <Package className="w-5 h-5" />
                   )}
                   <span className="font-semibold">
-                    {activeRide.status === 'accepted' ? 'Navigate to Pickup' : 'Ride in Progress'}
+                    {activeRide.status === 'accepted' ? 'Go to Pickup Location' : 'Heading to Drop Location'}
                   </span>
                 </div>
                 <div className="flex items-center gap-1 text-primary-foreground/90 text-sm">
-                  <CheckCircle className="w-4 h-4" />
-                  <span>{activeRide.status === 'accepted' ? 'Accepted' : 'In Progress'}</span>
+                  <CircleDot className="w-4 h-4" />
+                  <span>{activeRide.status === 'accepted' ? 'Picking Up' : 'On Trip'}</span>
                 </div>
+              </div>
+
+              {/* Route Map */}
+              <div className="h-48">
+                <RouteMap
+                  pickupLat={activeRide.pickup_lat}
+                  pickupLng={activeRide.pickup_lng}
+                  dropLat={activeRide.dropoff_lat}
+                  dropLng={activeRide.dropoff_lng}
+                />
               </div>
 
               <div className="p-5 space-y-4">
@@ -532,24 +572,32 @@ const DriverDashboard = () => {
                   </div>
                 </div>
 
-                {/* Locations */}
+                {/* Locations with status indicator */}
                 <div className="space-y-3">
-                  <div className="flex items-start gap-3">
-                    <div className="mt-1 p-1.5 rounded-full bg-primary/10">
+                  <div className={`flex items-start gap-3 p-3 rounded-xl transition-colors ${
+                    activeRide.status === 'accepted' ? 'bg-primary/10 border border-primary/30' : 'bg-muted/30'
+                  }`}>
+                    <div className="mt-0.5 p-1.5 rounded-full bg-primary/20">
                       <Navigation className="w-4 h-4 text-primary" />
                     </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground font-medium uppercase">Pickup</p>
+                    <div className="flex-1">
+                      <p className="text-xs text-muted-foreground font-medium uppercase">
+                        {activeRide.status === 'accepted' ? '📍 Navigate Here' : 'Pickup'}
+                      </p>
                       <p className="text-foreground font-medium">{activeRide.pickup_location}</p>
                     </div>
                   </div>
                   
-                  <div className="flex items-start gap-3">
-                    <div className="mt-1 p-1.5 rounded-full bg-secondary/10">
+                  <div className={`flex items-start gap-3 p-3 rounded-xl transition-colors ${
+                    activeRide.status === 'in_progress' ? 'bg-secondary/10 border border-secondary/30' : 'bg-muted/30'
+                  }`}>
+                    <div className="mt-0.5 p-1.5 rounded-full bg-secondary/20">
                       <MapPin className="w-4 h-4 text-secondary" />
                     </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground font-medium uppercase">Drop</p>
+                    <div className="flex-1">
+                      <p className="text-xs text-muted-foreground font-medium uppercase">
+                        {activeRide.status === 'in_progress' ? '📍 Navigate Here' : 'Drop'}
+                      </p>
                       <p className="text-foreground font-medium">{activeRide.dropoff_location}</p>
                     </div>
                   </div>
@@ -576,11 +624,11 @@ const DriverDashboard = () => {
                   {activeRide.status === 'accepted' ? (
                     <Button 
                       variant="hero" 
-                      className="flex-1"
+                      className="flex-1 bg-primary hover:bg-primary/90"
                       onClick={handleStartRide}
                     >
-                      <Navigation className="w-4 h-4 mr-2" />
-                      Start Ride
+                      <CheckCircle className="w-4 h-4 mr-2" />
+                      Picked Up Customer
                     </Button>
                   ) : (
                     <Button 
@@ -589,7 +637,7 @@ const DriverDashboard = () => {
                       onClick={handleFinishRide}
                     >
                       <CheckCircle className="w-4 h-4 mr-2" />
-                      Finish Ride
+                      End Ride
                     </Button>
                   )}
                 </div>
