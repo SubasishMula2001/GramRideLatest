@@ -23,7 +23,7 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import GramRideLogo from '@/components/GramRideLogo';
 import RideCard from '@/components/RideCard';
-import RouteMap from '@/components/RouteMap';
+import SecureRouteMap from '@/components/SecureRouteMap';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -548,9 +548,9 @@ const DriverDashboard = () => {
                 </div>
               </div>
 
-              {/* Route Map */}
-              <div className="h-48">
-                <RouteMap
+              {/* Route Info */}
+              <div className="p-4 border-b border-border/50">
+                <SecureRouteMap
                   pickupLat={activeRide.pickup_lat}
                   pickupLng={activeRide.pickup_lng}
                   dropLat={activeRide.dropoff_lat}
