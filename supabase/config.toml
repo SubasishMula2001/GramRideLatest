@@ -2,3 +2,6 @@ project_id = "anwscfwpyfipcpdffkuc"
 
 [functions.create-demo-user]
 verify_jwt = false
+
+[functions.reset-demo-passwords]
+verify_jwt = false
