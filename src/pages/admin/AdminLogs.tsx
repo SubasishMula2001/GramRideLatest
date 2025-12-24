@@ -1,92 +1,31 @@
-import React, { useState } from 'react';
-import { Search, Filter, Download, Activity, User, Car, Shield, AlertTriangle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Search, Filter, Download, Activity, User, Car, Shield, AlertTriangle, Loader2 } from 'lucide-react';
 import AdminSidebar from '@/components/AdminSidebar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import DataTable from '@/components/DataTable';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
-const logs = [
-  { 
-    id: 'L001',
-    timestamp: '2024-03-15 14:32:45',
-    type: 'Login',
-    user: 'Ramesh Kumar',
-    userType: 'User',
-    action: 'Logged in successfully',
-    ip: '192.168.1.45',
-    device: 'Android 13 - Chrome',
-    location: 'Rampur, West Bengal',
-    status: 'Success'
-  },
-  { 
-    id: 'L002',
-    timestamp: '2024-03-15 14:30:12',
-    type: 'Ride',
-    user: 'Suresh Mahato',
-    userType: 'Driver',
-    action: 'Accepted ride request R1234',
-    ip: '192.168.1.78',
-    device: 'Android 12 - App',
-    location: 'Sundarpur, West Bengal',
-    status: 'Success'
-  },
-  { 
-    id: 'L003',
-    timestamp: '2024-03-15 14:28:00',
-    type: 'Payment',
-    user: 'Priya Sharma',
-    userType: 'User',
-    action: 'Added ₹500 to wallet',
-    ip: '192.168.2.12',
-    device: 'iOS 17 - Safari',
-    location: 'Krishnanagar, West Bengal',
-    status: 'Success'
-  },
-  { 
-    id: 'L004',
-    timestamp: '2024-03-15 14:25:33',
-    type: 'Login',
-    user: 'Unknown',
-    userType: 'User',
-    action: 'Failed login attempt',
-    ip: '103.45.67.89',
-    device: 'Windows - Firefox',
-    location: 'Unknown',
-    status: 'Failed'
-  },
-  { 
-    id: 'L005',
-    timestamp: '2024-03-15 14:22:18',
-    type: 'Admin',
-    user: 'Admin',
-    userType: 'Admin',
-    action: 'Added new driver - Vijay Prasad',
-    ip: '192.168.1.1',
-    device: 'Windows - Chrome',
-    location: 'Office, Kolkata',
-    status: 'Success'
-  },
-  { 
-    id: 'L006',
-    timestamp: '2024-03-15 14:20:00',
-    type: 'Ride',
-    user: 'Mohan Lal',
-    userType: 'Driver',
-    action: 'Completed ride R1233',
-    ip: '192.168.3.45',
-    device: 'Android 11 - App',
-    location: 'Rampur, West Bengal',
-    status: 'Success'
-  },
-];
+interface LogData {
+  id: string;
+  timestamp: string;
+  type: string;
+  user_name: string;
+  action: string;
+  ip_address: string | null;
+  device_info: string | null;
+  details: any;
+}
 
 const getTypeIcon = (type: string) => {
   switch (type) {
     case 'Login': return <User className="w-4 h-4" />;
     case 'Ride': return <Car className="w-4 h-4" />;
     case 'Admin': return <Shield className="w-4 h-4" />;
-    case 'Payment': return <Activity className="w-4 h-4" />;
     default: return <Activity className="w-4 h-4" />;
   }
 };
@@ -96,62 +35,150 @@ const getTypeColor = (type: string) => {
     case 'Login': return 'bg-primary/10 text-primary';
     case 'Ride': return 'bg-secondary/10 text-secondary';
     case 'Admin': return 'bg-accent/10 text-accent';
-    case 'Payment': return 'bg-purple-500/10 text-purple-500';
     default: return 'bg-muted text-muted-foreground';
   }
 };
 
-const columns = [
-  { key: 'timestamp', header: 'Timestamp' },
-  { 
-    key: 'type', 
-    header: 'Type',
-    render: (item: typeof logs[0]) => (
-      <Badge variant="secondary" className={getTypeColor(item.type)}>
-        <span className="flex items-center gap-1">
-          {getTypeIcon(item.type)}
-          {item.type}
-        </span>
-      </Badge>
-    )
-  },
-  { 
-    key: 'user', 
-    header: 'User',
-    render: (item: typeof logs[0]) => (
-      <div>
-        <p className="font-medium text-foreground">{item.user}</p>
-        <p className="text-xs text-muted-foreground">{item.userType}</p>
-      </div>
-    )
-  },
-  { key: 'action', header: 'Action' },
-  { 
-    key: 'ip', 
-    header: 'IP Address',
-    render: (item: typeof logs[0]) => (
-      <code className="text-xs bg-muted px-2 py-1 rounded">{item.ip}</code>
-    )
-  },
-  { key: 'device', header: 'Device' },
-  { key: 'location', header: 'Location' },
-  { 
-    key: 'status', 
-    header: 'Status',
-    render: (item: typeof logs[0]) => (
-      <Badge 
-        variant={item.status === 'Success' ? 'default' : 'destructive'}
-        className={item.status === 'Success' ? 'bg-primary/10 text-primary' : ''}
-      >
-        {item.status}
-      </Badge>
-    )
-  },
-];
-
 const AdminLogs = () => {
+  const navigate = useNavigate();
+  const { user, userRole, loading: authLoading } = useAuth();
+  
+  const [logs, setLogs] = useState<LogData[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('all');
+
+  useEffect(() => {
+    if (!authLoading) {
+      if (!user || userRole !== 'admin') {
+        navigate('/login');
+        return;
+      }
+      fetchLogs();
+    }
+  }, [user, userRole, authLoading]);
+
+  const fetchLogs = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('activity_logs')
+        .select(`
+          id,
+          action,
+          details,
+          ip_address,
+          device_info,
+          created_at,
+          profiles:user_id(full_name)
+        `)
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      if (error) throw error;
+
+      const formattedLogs = (data || []).map(log => {
+        // Determine type from action
+        let type = 'Activity';
+        if (log.action.toLowerCase().includes('login') || log.action.toLowerCase().includes('logout')) {
+          type = 'Login';
+        } else if (log.action.toLowerCase().includes('ride') || log.action.toLowerCase().includes('booking')) {
+          type = 'Ride';
+        } else if (log.action.toLowerCase().includes('admin') || log.action.toLowerCase().includes('driver')) {
+          type = 'Admin';
+        }
+
+        return {
+          id: log.id,
+          timestamp: new Date(log.created_at).toLocaleString('en-IN'),
+          type,
+          user_name: (log.profiles as any)?.full_name || 'System',
+          action: log.action,
+          ip_address: log.ip_address,
+          device_info: log.device_info,
+          details: log.details
+        };
+      });
+
+      setLogs(formattedLogs);
+    } catch (error) {
+      console.error('Error fetching logs:', error);
+      toast.error('Failed to load logs');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleExport = () => {
+    const csvContent = logs.map(log => 
+      `${log.timestamp},${log.type},${log.user_name},${log.action},${log.ip_address || ''},${log.device_info || ''}`
+    ).join('\n');
+    
+    const blob = new Blob([`Timestamp,Type,User,Action,IP,Device\n${csvContent}`], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `gramride-logs-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    toast.success('Logs exported successfully');
+  };
+
+  const filteredLogs = logs.filter(log => {
+    const matchesSearch = 
+      log.user_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      log.action.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesType = filterType === 'all' || log.type === filterType;
+    return matchesSearch && matchesType;
+  });
+
+  const columns = [
+    { key: 'timestamp', header: 'Timestamp' },
+    { 
+      key: 'type', 
+      header: 'Type',
+      render: (item: LogData) => (
+        <Badge variant="secondary" className={getTypeColor(item.type)}>
+          <span className="flex items-center gap-1">
+            {getTypeIcon(item.type)}
+            {item.type}
+          </span>
+        </Badge>
+      )
+    },
+    { 
+      key: 'user_name', 
+      header: 'User',
+      render: (item: LogData) => (
+        <p className="font-medium text-foreground">{item.user_name}</p>
+      )
+    },
+    { key: 'action', header: 'Action' },
+    { 
+      key: 'ip_address', 
+      header: 'IP Address',
+      render: (item: LogData) => (
+        <code className="text-xs bg-muted px-2 py-1 rounded">{item.ip_address || '--'}</code>
+      )
+    },
+    { 
+      key: 'device_info', 
+      header: 'Device',
+      render: (item: LogData) => item.device_info || '--'
+    },
+  ];
+
+  if (authLoading || loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  const todayLogs = logs.filter(l => 
+    new Date(l.timestamp).toDateString() === new Date().toDateString()
+  ).length;
+  const loginLogs = logs.filter(l => l.type === 'Login').length;
+  const rideLogs = logs.filter(l => l.type === 'Ride').length;
 
   return (
     <div className="min-h-screen bg-background">
@@ -165,7 +192,7 @@ const AdminLogs = () => {
             <p className="text-muted-foreground">Monitor all system activities and user actions</p>
           </div>
           
-          <Button variant="outline">
+          <Button variant="outline" onClick={handleExport}>
             <Download className="w-4 h-4" />
             Export Logs
           </Button>
@@ -184,7 +211,7 @@ const AdminLogs = () => {
           </div>
           
           <div className="flex gap-2">
-            {['all', 'Login', 'Ride', 'Payment', 'Admin'].map((type) => (
+            {['all', 'Login', 'Ride', 'Admin', 'Activity'].map((type) => (
               <Button
                 key={type}
                 variant={filterType === type ? 'default' : 'outline'}
@@ -195,38 +222,36 @@ const AdminLogs = () => {
               </Button>
             ))}
           </div>
-          
-          <Button variant="outline">
-            <Filter className="w-4 h-4" />
-            More Filters
-          </Button>
         </div>
 
         {/* Stats */}
         <div className="grid grid-cols-4 gap-4 mb-6">
           <div className="bg-gradient-card rounded-xl border border-border/50 p-4">
-            <p className="text-sm text-muted-foreground">Today's Events</p>
-            <p className="text-2xl font-bold text-foreground">1,234</p>
+            <p className="text-sm text-muted-foreground">Total Logs</p>
+            <p className="text-2xl font-bold text-foreground">{logs.length}</p>
           </div>
           <div className="bg-gradient-card rounded-xl border border-border/50 p-4">
-            <p className="text-sm text-muted-foreground">Login Attempts</p>
-            <p className="text-2xl font-bold text-primary">456</p>
+            <p className="text-sm text-muted-foreground">Today's Events</p>
+            <p className="text-2xl font-bold text-primary">{todayLogs}</p>
+          </div>
+          <div className="bg-gradient-card rounded-xl border border-border/50 p-4">
+            <p className="text-sm text-muted-foreground">Login Events</p>
+            <p className="text-2xl font-bold text-secondary">{loginLogs}</p>
           </div>
           <div className="bg-gradient-card rounded-xl border border-border/50 p-4">
             <p className="text-sm text-muted-foreground">Ride Events</p>
-            <p className="text-2xl font-bold text-secondary">678</p>
-          </div>
-          <div className="bg-gradient-card rounded-xl border border-border/50 p-4 flex items-center gap-3">
-            <AlertTriangle className="w-6 h-6 text-destructive" />
-            <div>
-              <p className="text-sm text-muted-foreground">Failed Events</p>
-              <p className="text-2xl font-bold text-destructive">12</p>
-            </div>
+            <p className="text-2xl font-bold text-accent">{rideLogs}</p>
           </div>
         </div>
 
         {/* Table */}
-        <DataTable columns={columns} data={logs} />
+        {filteredLogs.length > 0 ? (
+          <DataTable columns={columns} data={filteredLogs} />
+        ) : (
+          <div className="bg-gradient-card rounded-xl border border-border/50 p-12 text-center">
+            <p className="text-muted-foreground">No logs found</p>
+          </div>
+        )}
       </main>
     </div>
   );

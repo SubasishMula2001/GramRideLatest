@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { Search, Plus, Filter, MoreVertical, Car, Star, CheckCircle, XCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Search, Plus, Filter, MoreVertical, Car, Star, CheckCircle, Loader2 } from 'lucide-react';
 import AdminSidebar from '@/components/AdminSidebar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,142 +15,246 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
-const drivers = [
-  { 
-    id: 'D001', 
-    name: 'Suresh Mahato', 
-    phone: '+91 98765 11111', 
-    vehicle: 'WB 12 A 3456',
-    type: 'Passenger',
-    rating: 4.8,
-    rides: 234, 
-    earnings: 45000,
-    status: 'Online',
-    verified: true,
-    joined: '10 Oct 2023',
-  },
-  { 
-    id: 'D002', 
-    name: 'Mohan Lal', 
-    phone: '+91 87654 22222', 
-    vehicle: 'WB 14 B 7890',
-    type: 'Both',
-    rating: 4.5,
-    rides: 189, 
-    earnings: 38000,
-    status: 'Offline',
-    verified: true,
-    joined: '25 Nov 2023',
-  },
-  { 
-    id: 'D003', 
-    name: 'Raju Kumar', 
-    phone: '+91 76543 33333', 
-    vehicle: 'WB 11 C 4567',
-    type: 'Goods',
-    rating: 4.9,
-    rides: 312, 
-    earnings: 62000,
-    status: 'Online',
-    verified: true,
-    joined: '05 Sep 2023',
-  },
-  { 
-    id: 'D004', 
-    name: 'Vijay Prasad', 
-    phone: '+91 65432 44444', 
-    vehicle: 'WB 15 D 1234',
-    type: 'Passenger',
-    rating: 4.2,
-    rides: 78, 
-    earnings: 15000,
-    status: 'Pending',
-    verified: false,
-    joined: '01 Mar 2024',
-  },
-];
-
-const columns = [
-  { 
-    key: 'name', 
-    header: 'Driver',
-    render: (item: typeof drivers[0]) => (
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-full bg-secondary/10 flex items-center justify-center">
-          <Car className="w-5 h-5 text-secondary" />
-        </div>
-        <div>
-          <div className="flex items-center gap-2">
-            <p className="font-medium text-foreground">{item.name}</p>
-            {item.verified && (
-              <CheckCircle className="w-4 h-4 text-primary" />
-            )}
-          </div>
-          <p className="text-sm text-muted-foreground">{item.vehicle}</p>
-        </div>
-      </div>
-    )
-  },
-  { key: 'phone', header: 'Phone' },
-  { 
-    key: 'type', 
-    header: 'Type',
-    render: (item: typeof drivers[0]) => (
-      <Badge variant="secondary">{item.type}</Badge>
-    )
-  },
-  { 
-    key: 'rating', 
-    header: 'Rating',
-    render: (item: typeof drivers[0]) => (
-      <div className="flex items-center gap-1">
-        <Star className="w-4 h-4 text-secondary fill-secondary" />
-        <span className="font-medium">{item.rating}</span>
-      </div>
-    )
-  },
-  { key: 'rides', header: 'Rides' },
-  { 
-    key: 'earnings', 
-    header: 'Earnings',
-    render: (item: typeof drivers[0]) => (
-      <span className="font-medium">₹{item.earnings.toLocaleString()}</span>
-    )
-  },
-  { 
-    key: 'status', 
-    header: 'Status',
-    render: (item: typeof drivers[0]) => (
-      <Badge 
-        variant={
-          item.status === 'Online' ? 'default' : 
-          item.status === 'Pending' ? 'secondary' : 
-          'outline'
-        }
-        className={
-          item.status === 'Online' ? 'bg-primary/10 text-primary' :
-          item.status === 'Pending' ? 'bg-secondary/10 text-secondary' : ''
-        }
-      >
-        {item.status}
-      </Badge>
-    )
-  },
-  { 
-    key: 'actions', 
-    header: '',
-    render: () => (
-      <Button variant="ghost" size="icon">
-        <MoreVertical className="w-4 h-4" />
-      </Button>
-    )
-  },
-];
+interface DriverData {
+  id: string;
+  user_id: string;
+  full_name: string | null;
+  phone: string | null;
+  vehicle_number: string;
+  license_number: string | null;
+  rating: number;
+  total_rides: number;
+  earnings: number;
+  is_available: boolean;
+  is_verified: boolean;
+  created_at: string;
+}
 
 const AdminDrivers = () => {
+  const navigate = useNavigate();
+  const { user, userRole, loading: authLoading } = useAuth();
+  
+  const [drivers, setDrivers] = useState<DriverData[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [newDriver, setNewDriver] = useState({ 
+    full_name: '', 
+    email: '', 
+    password: '',
+    phone: '', 
+    vehicle_number: '', 
+    license_number: '' 
+  });
+  const [addingDriver, setAddingDriver] = useState(false);
+
+  useEffect(() => {
+    if (!authLoading) {
+      if (!user || userRole !== 'admin') {
+        navigate('/login');
+        return;
+      }
+      fetchDrivers();
+    }
+  }, [user, userRole, authLoading]);
+
+  const fetchDrivers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('drivers')
+        .select(`
+          id,
+          user_id,
+          vehicle_number,
+          license_number,
+          rating,
+          total_rides,
+          earnings,
+          is_available,
+          is_verified,
+          created_at,
+          profiles:user_id(full_name, phone)
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const formattedDrivers = (data || []).map(driver => ({
+        id: driver.id,
+        user_id: driver.user_id,
+        full_name: (driver.profiles as any)?.full_name || 'Unknown',
+        phone: (driver.profiles as any)?.phone || '--',
+        vehicle_number: driver.vehicle_number,
+        license_number: driver.license_number,
+        rating: driver.rating || 5.0,
+        total_rides: driver.total_rides || 0,
+        earnings: driver.earnings || 0,
+        is_available: driver.is_available,
+        is_verified: driver.is_verified,
+        created_at: new Date(driver.created_at).toLocaleDateString('en-IN', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric'
+        })
+      }));
+
+      setDrivers(formattedDrivers);
+    } catch (error) {
+      console.error('Error fetching drivers:', error);
+      toast.error('Failed to load drivers');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddDriver = async () => {
+    if (!newDriver.email || !newDriver.password || !newDriver.vehicle_number) {
+      toast.error('Email, password and vehicle number are required');
+      return;
+    }
+
+    setAddingDriver(true);
+    try {
+      const response = await supabase.functions.invoke('create-demo-user', {
+        body: {
+          email: newDriver.email,
+          password: newDriver.password,
+          fullName: newDriver.full_name,
+          role: 'driver',
+          vehicleNumber: newDriver.vehicle_number,
+          licenseNumber: newDriver.license_number
+        }
+      });
+
+      if (response.error) throw response.error;
+
+      toast.success('Driver added successfully');
+      setIsAddDialogOpen(false);
+      setNewDriver({ full_name: '', email: '', password: '', phone: '', vehicle_number: '', license_number: '' });
+      fetchDrivers();
+    } catch (error: any) {
+      console.error('Error adding driver:', error);
+      toast.error(error.message || 'Failed to add driver');
+    } finally {
+      setAddingDriver(false);
+    }
+  };
+
+  const handleVerifyDriver = async (driverId: string, currentStatus: boolean) => {
+    try {
+      const { error } = await supabase
+        .from('drivers')
+        .update({ is_verified: !currentStatus })
+        .eq('id', driverId);
+
+      if (error) throw error;
+
+      toast.success(currentStatus ? 'Driver unverified' : 'Driver verified');
+      fetchDrivers();
+    } catch (error) {
+      console.error('Error updating driver:', error);
+      toast.error('Failed to update driver');
+    }
+  };
+
+  const filteredDrivers = drivers.filter(d => 
+    d.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    d.vehicle_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    d.phone?.includes(searchQuery)
+  );
+
+  const columns = [
+    { 
+      key: 'full_name', 
+      header: 'Driver',
+      render: (item: DriverData) => (
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-secondary/10 flex items-center justify-center">
+            <Car className="w-5 h-5 text-secondary" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <p className="font-medium text-foreground">{item.full_name}</p>
+              {item.is_verified && (
+                <CheckCircle className="w-4 h-4 text-primary" />
+              )}
+            </div>
+            <p className="text-sm text-muted-foreground">{item.vehicle_number}</p>
+          </div>
+        </div>
+      )
+    },
+    { key: 'phone', header: 'Phone' },
+    { 
+      key: 'rating', 
+      header: 'Rating',
+      render: (item: DriverData) => (
+        <div className="flex items-center gap-1">
+          <Star className="w-4 h-4 text-secondary fill-secondary" />
+          <span className="font-medium">{item.rating.toFixed(1)}</span>
+        </div>
+      )
+    },
+    { key: 'total_rides', header: 'Rides' },
+    { 
+      key: 'earnings', 
+      header: 'Earnings',
+      render: (item: DriverData) => (
+        <span className="font-medium">₹{item.earnings.toLocaleString()}</span>
+      )
+    },
+    { 
+      key: 'status', 
+      header: 'Status',
+      render: (item: DriverData) => (
+        <Badge 
+          variant={
+            item.is_available ? 'default' : 
+            !item.is_verified ? 'secondary' : 
+            'outline'
+          }
+          className={
+            item.is_available ? 'bg-primary/10 text-primary' :
+            !item.is_verified ? 'bg-secondary/10 text-secondary' : ''
+          }
+        >
+          {!item.is_verified ? 'Pending' : item.is_available ? 'Online' : 'Offline'}
+        </Badge>
+      )
+    },
+    { 
+      key: 'actions', 
+      header: '',
+      render: (item: DriverData) => (
+        <Button 
+          variant="ghost" 
+          size="sm"
+          onClick={() => handleVerifyDriver(item.id, item.is_verified)}
+        >
+          {item.is_verified ? 'Unverify' : 'Verify'}
+        </Button>
+      )
+    },
+  ];
+
+  if (authLoading || loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  const totalDrivers = drivers.length;
+  const onlineNow = drivers.filter(d => d.is_available && d.is_verified).length;
+  const pendingVerification = drivers.filter(d => !d.is_verified).length;
+  const avgRating = drivers.length > 0 
+    ? (drivers.reduce((sum, d) => sum + d.rating, 0) / drivers.length).toFixed(1) 
+    : '0.0';
 
   return (
     <div className="min-h-screen bg-background">
@@ -181,35 +286,63 @@ const AdminDrivers = () => {
               <div className="space-y-4 mt-4">
                 <div className="space-y-2">
                   <Label htmlFor="name">Full Name</Label>
-                  <Input id="name" placeholder="Enter full name" />
+                  <Input 
+                    id="name" 
+                    placeholder="Enter full name"
+                    value={newDriver.full_name}
+                    onChange={(e) => setNewDriver(prev => ({ ...prev, full_name: e.target.value }))}
+                  />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="phone">Phone Number</Label>
-                  <Input id="phone" placeholder="+91 XXXXX XXXXX" />
+                  <Label htmlFor="email">Email *</Label>
+                  <Input 
+                    id="email" 
+                    type="email" 
+                    placeholder="driver@example.com"
+                    value={newDriver.email}
+                    onChange={(e) => setNewDriver(prev => ({ ...prev, email: e.target.value }))}
+                  />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="vehicle">Vehicle Number</Label>
-                  <Input id="vehicle" placeholder="WB XX X XXXX" />
+                  <Label htmlFor="password">Password *</Label>
+                  <Input 
+                    id="password" 
+                    type="password"
+                    placeholder="Min 6 characters"
+                    value={newDriver.password}
+                    onChange={(e) => setNewDriver(prev => ({ ...prev, password: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="vehicle">Vehicle Number *</Label>
+                  <Input 
+                    id="vehicle" 
+                    placeholder="WB XX X XXXX"
+                    value={newDriver.vehicle_number}
+                    onChange={(e) => setNewDriver(prev => ({ ...prev, vehicle_number: e.target.value }))}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="license">License Number</Label>
-                  <Input id="license" placeholder="Enter license number" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="type">Service Type</Label>
-                  <select id="type" className="w-full h-10 px-3 rounded-lg border border-input bg-background">
-                    <option value="passenger">Passenger Only</option>
-                    <option value="goods">Goods Only</option>
-                    <option value="both">Both</option>
-                  </select>
+                  <Input 
+                    id="license" 
+                    placeholder="Enter license number"
+                    value={newDriver.license_number}
+                    onChange={(e) => setNewDriver(prev => ({ ...prev, license_number: e.target.value }))}
+                  />
                 </div>
                 
                 <div className="flex gap-3 pt-4">
                   <Button variant="outline" className="flex-1" onClick={() => setIsAddDialogOpen(false)}>
                     Cancel
                   </Button>
-                  <Button variant="hero" className="flex-1" onClick={() => setIsAddDialogOpen(false)}>
-                    Add Driver
+                  <Button 
+                    variant="hero" 
+                    className="flex-1" 
+                    onClick={handleAddDriver}
+                    disabled={addingDriver}
+                  >
+                    {addingDriver ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Add Driver'}
                   </Button>
                 </div>
               </div>
@@ -238,27 +371,33 @@ const AdminDrivers = () => {
         <div className="grid grid-cols-4 gap-4 mb-6">
           <div className="bg-gradient-card rounded-xl border border-border/50 p-4">
             <p className="text-sm text-muted-foreground">Total Drivers</p>
-            <p className="text-2xl font-bold text-foreground">524</p>
+            <p className="text-2xl font-bold text-foreground">{totalDrivers}</p>
           </div>
           <div className="bg-gradient-card rounded-xl border border-border/50 p-4">
             <p className="text-sm text-muted-foreground">Online Now</p>
-            <p className="text-2xl font-bold text-primary">156</p>
+            <p className="text-2xl font-bold text-primary">{onlineNow}</p>
           </div>
           <div className="bg-gradient-card rounded-xl border border-border/50 p-4">
             <p className="text-sm text-muted-foreground">Pending Verification</p>
-            <p className="text-2xl font-bold text-secondary">23</p>
+            <p className="text-2xl font-bold text-secondary">{pendingVerification}</p>
           </div>
           <div className="bg-gradient-card rounded-xl border border-border/50 p-4">
             <p className="text-sm text-muted-foreground">Avg Rating</p>
             <p className="text-2xl font-bold text-foreground flex items-center gap-1">
               <Star className="w-5 h-5 text-secondary fill-secondary" />
-              4.6
+              {avgRating}
             </p>
           </div>
         </div>
 
         {/* Table */}
-        <DataTable columns={columns} data={drivers} />
+        {filteredDrivers.length > 0 ? (
+          <DataTable columns={columns} data={filteredDrivers} />
+        ) : (
+          <div className="bg-gradient-card rounded-xl border border-border/50 p-12 text-center">
+            <p className="text-muted-foreground">No drivers found</p>
+          </div>
+        )}
       </main>
     </div>
   );

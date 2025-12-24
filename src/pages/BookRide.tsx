@@ -1,19 +1,70 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { ArrowLeft, Users, Package, IndianRupee, Clock, MapPin, Navigation } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Users, Package, IndianRupee, Clock, MapPin, Navigation, Loader2, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import GramRideLogo from '@/components/GramRideLogo';
 import BookingTypeCard from '@/components/BookingTypeCard';
 import LocationInput from '@/components/LocationInput';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 type BookingType = 'passenger' | 'goods' | null;
-type BookingStep = 'type' | 'location' | 'confirm';
+type BookingStep = 'type' | 'location' | 'confirm' | 'searching' | 'booked';
 
 const BookRide = () => {
+  const navigate = useNavigate();
+  const { user, loading: authLoading } = useAuth();
+  
   const [bookingType, setBookingType] = useState<BookingType>(null);
   const [step, setStep] = useState<BookingStep>('type');
   const [pickup, setPickup] = useState('');
   const [drop, setDrop] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [rideId, setRideId] = useState<string | null>(null);
+  
+  // Estimated values
+  const estimatedDistance = 3.5;
+  const estimatedTime = 12;
+  const baseFare = bookingType === 'passenger' ? 20 : 30;
+  const perKmRate = bookingType === 'passenger' ? 8 : 12;
+  const estimatedFare = Math.round(baseFare + (estimatedDistance * perKmRate));
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      toast.error('Please login to book a ride');
+      navigate('/login');
+    }
+  }, [user, authLoading, navigate]);
+
+  // Subscribe to ride updates when waiting for driver
+  useEffect(() => {
+    if (!rideId || step !== 'searching') return;
+
+    const channel = supabase
+      .channel(`ride-${rideId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'rides',
+          filter: `id=eq.${rideId}`
+        },
+        (payload) => {
+          const updatedRide = payload.new as any;
+          if (updatedRide.status === 'accepted') {
+            setStep('booked');
+            toast.success('Driver found! Your ride is confirmed.');
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [rideId, step]);
 
   const handleTypeSelect = (type: BookingType) => {
     setBookingType(type);
@@ -26,6 +77,57 @@ const BookRide = () => {
     }
   };
 
+  const handleConfirmBooking = async () => {
+    if (!user) {
+      toast.error('Please login to book a ride');
+      navigate('/login');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('rides')
+        .insert({
+          user_id: user.id,
+          ride_type: bookingType,
+          pickup_location: pickup,
+          dropoff_location: drop,
+          fare: estimatedFare,
+          distance_km: estimatedDistance,
+          duration_mins: estimatedTime,
+          status: 'pending'
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setRideId(data.id);
+      setStep('searching');
+      toast.success('Booking created! Finding a driver...');
+
+      // Log the activity
+      await supabase.from('activity_logs').insert({
+        user_id: user.id,
+        action: 'Ride Booked',
+        details: { 
+          ride_id: data.id, 
+          ride_type: bookingType,
+          pickup: pickup,
+          drop: drop,
+          fare: estimatedFare 
+        }
+      });
+
+    } catch (error: any) {
+      console.error('Booking error:', error);
+      toast.error('Failed to create booking. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleBack = () => {
     if (step === 'location') {
       setStep('type');
@@ -35,13 +137,21 @@ const BookRide = () => {
     }
   };
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-hero flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-hero">
       {/* Header */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border/50">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            {step !== 'type' && (
+            {(step === 'location' || step === 'confirm') && (
               <Button variant="ghost" size="icon" onClick={handleBack}>
                 <ArrowLeft className="w-5 h-5" />
               </Button>
@@ -191,32 +301,105 @@ const BookRide = () => {
                 <div className="bg-muted/50 rounded-xl p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">Estimated Distance</span>
-                    <span className="font-semibold text-foreground">3.5 km</span>
+                    <span className="font-semibold text-foreground">{estimatedDistance} km</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">Estimated Time</span>
                     <span className="font-semibold text-foreground flex items-center gap-1">
                       <Clock className="w-4 h-4" />
-                      12 min
+                      {estimatedTime} min
                     </span>
                   </div>
                   <div className="border-t border-border pt-3 flex items-center justify-between">
                     <span className="font-medium text-foreground">Estimated Fare</span>
                     <span className="text-xl font-bold text-primary flex items-center">
                       <IndianRupee className="w-5 h-5" />
-                      45
+                      {estimatedFare}
                     </span>
                   </div>
                 </div>
               </div>
 
-              <Button variant="hero" size="xl" className="w-full">
-                Confirm Booking
+              <Button 
+                variant="hero" 
+                size="xl" 
+                className="w-full"
+                onClick={handleConfirmBooking}
+                disabled={loading}
+              >
+                {loading ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  'Confirm Booking'
+                )}
               </Button>
 
               <p className="text-center text-sm text-muted-foreground mt-4">
                 You'll be matched with a nearby driver
               </p>
+            </div>
+          )}
+
+          {/* Step: Searching for Driver */}
+          {step === 'searching' && (
+            <div className="animate-fade-in text-center py-12">
+              <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-primary/10 flex items-center justify-center">
+                <Loader2 className="w-12 h-12 text-primary animate-spin" />
+              </div>
+              <h1 className="text-2xl font-bold text-foreground mb-2">
+                Finding Your Driver...
+              </h1>
+              <p className="text-muted-foreground mb-8">
+                Please wait while we connect you with a nearby driver
+              </p>
+              
+              <div className="bg-gradient-card rounded-2xl border border-border/50 p-6 text-left">
+                <div className="flex items-center gap-3 mb-4">
+                  <Navigation className="w-5 h-5 text-primary" />
+                  <span className="text-foreground">{pickup}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <MapPin className="w-5 h-5 text-secondary" />
+                  <span className="text-foreground">{drop}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Step: Booked Successfully */}
+          {step === 'booked' && (
+            <div className="animate-fade-in text-center py-12">
+              <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-primary/10 flex items-center justify-center">
+                <CheckCircle className="w-12 h-12 text-primary" />
+              </div>
+              <h1 className="text-2xl font-bold text-foreground mb-2">
+                Ride Confirmed!
+              </h1>
+              <p className="text-muted-foreground mb-8">
+                Your driver is on the way to pick you up
+              </p>
+              
+              <div className="bg-gradient-card rounded-2xl border border-border/50 p-6 text-left mb-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <Navigation className="w-5 h-5 text-primary" />
+                  <span className="text-foreground">{pickup}</span>
+                </div>
+                <div className="flex items-center gap-3 mb-4">
+                  <MapPin className="w-5 h-5 text-secondary" />
+                  <span className="text-foreground">{drop}</span>
+                </div>
+                <div className="border-t border-border pt-4 flex items-center justify-between">
+                  <span className="text-muted-foreground">Fare</span>
+                  <span className="text-xl font-bold text-primary flex items-center">
+                    <IndianRupee className="w-5 h-5" />
+                    {estimatedFare}
+                  </span>
+                </div>
+              </div>
+
+              <Button variant="hero" size="xl" className="w-full" asChild>
+                <Link to="/">Back to Home</Link>
+              </Button>
             </div>
           )}
 
