@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Users, Package, IndianRupee, Clock, MapPin, Navigation, Loader2, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Users, Package, IndianRupee, Clock, MapPin, Navigation, Loader2, CheckCircle, Car, Phone, User, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import GramRideLogo from '@/components/GramRideLogo';
 import BookingTypeCard from '@/components/BookingTypeCard';
@@ -10,7 +10,15 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 type BookingType = 'passenger' | 'goods' | null;
-type BookingStep = 'type' | 'location' | 'confirm' | 'searching' | 'booked';
+type BookingStep = 'type' | 'location' | 'confirm' | 'searching' | 'booked' | 'in_progress' | 'completed';
+
+interface DriverInfo {
+  name: string;
+  phone: string | null;
+  vehicle_number: string;
+  vehicle_type: string;
+  rating: number;
+}
 
 const BookRide = () => {
   const navigate = useNavigate();
@@ -22,6 +30,7 @@ const BookRide = () => {
   const [drop, setDrop] = useState('');
   const [loading, setLoading] = useState(false);
   const [rideId, setRideId] = useState<string | null>(null);
+  const [driverInfo, setDriverInfo] = useState<DriverInfo | null>(null);
   
   // Estimated values
   const estimatedDistance = 3.5;
@@ -39,7 +48,7 @@ const BookRide = () => {
 
   // Subscribe to ride updates when waiting for driver
   useEffect(() => {
-    if (!rideId || step !== 'searching') return;
+    if (!rideId) return;
 
     const channel = supabase
       .channel(`ride-${rideId}`)
@@ -51,11 +60,20 @@ const BookRide = () => {
           table: 'rides',
           filter: `id=eq.${rideId}`
         },
-        (payload) => {
+        async (payload) => {
           const updatedRide = payload.new as any;
-          if (updatedRide.status === 'accepted') {
+          
+          if (updatedRide.status === 'accepted' && step === 'searching') {
+            // Fetch driver info
+            await fetchDriverInfo(updatedRide.driver_id);
             setStep('booked');
             toast.success('Driver found! Your ride is confirmed.');
+          } else if (updatedRide.status === 'in_progress' && step === 'booked') {
+            setStep('in_progress');
+            toast.info('Your ride has started!');
+          } else if (updatedRide.status === 'completed') {
+            setStep('completed');
+            toast.success('Ride completed! Thank you for riding with GramRide.');
           }
         }
       )
@@ -65,6 +83,35 @@ const BookRide = () => {
       supabase.removeChannel(channel);
     };
   }, [rideId, step]);
+
+  const fetchDriverInfo = async (driverId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('drivers')
+        .select(`
+          vehicle_number,
+          vehicle_type,
+          rating,
+          profiles:user_id(full_name, phone)
+        `)
+        .eq('id', driverId)
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        setDriverInfo({
+          name: (data.profiles as any)?.full_name || 'Driver',
+          phone: (data.profiles as any)?.phone || null,
+          vehicle_number: data.vehicle_number,
+          vehicle_type: data.vehicle_type || 'Toto',
+          rating: data.rating || 5.0
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching driver info:', error);
+    }
+  };
 
   const handleTypeSelect = (type: BookingType) => {
     setBookingType(type);
@@ -348,20 +395,180 @@ const BookRide = () => {
             </div>
           )}
 
-          {/* Step: Booked Successfully */}
+          {/* Step: Booked - Driver Assigned */}
           {step === 'booked' && (
+            <div className="animate-fade-in py-8">
+              <div className="text-center mb-6">
+                <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center">
+                  <CheckCircle className="w-10 h-10 text-primary" />
+                </div>
+                <h1 className="text-2xl font-bold text-foreground mb-1">
+                  Driver Assigned!
+                </h1>
+                <p className="text-muted-foreground">
+                  Your driver is on the way to pick you up
+                </p>
+              </div>
+
+              {/* Driver Info Card */}
+              {driverInfo && (
+                <div className="bg-gradient-card rounded-2xl border-2 border-primary shadow-elevated overflow-hidden mb-6">
+                  <div className="bg-gradient-primary px-5 py-3">
+                    <p className="text-primary-foreground font-semibold">Your Driver</p>
+                  </div>
+                  
+                  <div className="p-5">
+                    <div className="flex items-center gap-4 mb-4">
+                      <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+                        <User className="w-8 h-8 text-primary" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="text-lg font-bold text-foreground">{driverInfo.name}</h3>
+                        <div className="flex items-center gap-1 text-secondary">
+                          <Star className="w-4 h-4 fill-secondary" />
+                          <span className="font-medium">{driverInfo.rating.toFixed(1)}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3 py-4 border-t border-b border-border/50">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-secondary/10">
+                          <Car className="w-5 h-5 text-secondary" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground uppercase">Vehicle</p>
+                          <p className="font-semibold text-foreground">{driverInfo.vehicle_type}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-primary/10">
+                          <span className="text-primary font-bold text-sm">№</span>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground uppercase">Vehicle Number</p>
+                          <p className="font-semibold text-foreground">{driverInfo.vehicle_number}</p>
+                        </div>
+                      </div>
+                      {driverInfo.phone && (
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 rounded-lg bg-green-500/10">
+                            <Phone className="w-5 h-5 text-green-600" />
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground uppercase">Phone</p>
+                            <p className="font-semibold text-foreground">{driverInfo.phone}</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="mt-4 space-y-2">
+                      <div className="flex items-center gap-2 text-sm">
+                        <Navigation className="w-4 h-4 text-primary" />
+                        <span className="text-foreground">{pickup}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm">
+                        <MapPin className="w-4 h-4 text-secondary" />
+                        <span className="text-foreground">{drop}</span>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 pt-4 border-t border-border/50 flex items-center justify-between">
+                      <span className="text-muted-foreground">Fare</span>
+                      <span className="text-xl font-bold text-primary flex items-center">
+                        <IndianRupee className="w-5 h-5" />
+                        {estimatedFare}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Step: Ride In Progress */}
+          {step === 'in_progress' && (
+            <div className="animate-fade-in py-8">
+              <div className="text-center mb-6">
+                <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-green-500/10 flex items-center justify-center">
+                  <Navigation className="w-10 h-10 text-green-600 animate-pulse" />
+                </div>
+                <h1 className="text-2xl font-bold text-foreground mb-1">
+                  Ride in Progress
+                </h1>
+                <p className="text-muted-foreground">
+                  Enjoy your ride!
+                </p>
+              </div>
+
+              {/* Driver Info Card */}
+              {driverInfo && (
+                <div className="bg-gradient-card rounded-2xl border-2 border-green-500 shadow-elevated overflow-hidden mb-6">
+                  <div className="bg-green-600 px-5 py-3">
+                    <p className="text-white font-semibold">Ride in Progress</p>
+                  </div>
+                  
+                  <div className="p-5">
+                    <div className="flex items-center gap-4 mb-4">
+                      <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
+                        <User className="w-7 h-7 text-primary" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="text-lg font-bold text-foreground">{driverInfo.name}</h3>
+                        <p className="text-sm text-muted-foreground">{driverInfo.vehicle_type} • {driverInfo.vehicle_number}</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm">
+                        <Navigation className="w-4 h-4 text-primary" />
+                        <span className="text-foreground">{pickup}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm">
+                        <MapPin className="w-4 h-4 text-secondary" />
+                        <span className="text-foreground">{drop}</span>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 pt-4 border-t border-border/50 flex items-center justify-between">
+                      <span className="text-muted-foreground">Fare</span>
+                      <span className="text-xl font-bold text-primary flex items-center">
+                        <IndianRupee className="w-5 h-5" />
+                        {estimatedFare}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Step: Ride Completed */}
+          {step === 'completed' && (
             <div className="animate-fade-in text-center py-12">
-              <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-primary/10 flex items-center justify-center">
-                <CheckCircle className="w-12 h-12 text-primary" />
+              <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-green-500/10 flex items-center justify-center">
+                <CheckCircle className="w-12 h-12 text-green-600" />
               </div>
               <h1 className="text-2xl font-bold text-foreground mb-2">
-                Ride Confirmed!
+                Ride Completed!
               </h1>
               <p className="text-muted-foreground mb-8">
-                Your driver is on the way to pick you up
+                Thank you for riding with GramRide
               </p>
               
               <div className="bg-gradient-card rounded-2xl border border-border/50 p-6 text-left mb-6">
+                {driverInfo && (
+                  <div className="flex items-center gap-3 pb-4 mb-4 border-b border-border/50">
+                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                      <User className="w-6 h-6 text-primary" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-foreground">{driverInfo.name}</p>
+                      <p className="text-sm text-muted-foreground">{driverInfo.vehicle_type} • {driverInfo.vehicle_number}</p>
+                    </div>
+                  </div>
+                )}
                 <div className="flex items-center gap-3 mb-4">
                   <Navigation className="w-5 h-5 text-primary" />
                   <span className="text-foreground">{pickup}</span>
@@ -371,7 +578,7 @@ const BookRide = () => {
                   <span className="text-foreground">{drop}</span>
                 </div>
                 <div className="border-t border-border pt-4 flex items-center justify-between">
-                  <span className="text-muted-foreground">Fare</span>
+                  <span className="text-muted-foreground">Total Fare Paid</span>
                   <span className="text-xl font-bold text-primary flex items-center">
                     <IndianRupee className="w-5 h-5" />
                     {estimatedFare}

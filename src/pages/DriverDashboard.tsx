@@ -11,7 +11,12 @@ import {
   User,
   ArrowLeft,
   LogOut,
-  Loader2
+  Loader2,
+  MapPin,
+  CheckCircle,
+  Phone,
+  Package,
+  Car
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -31,6 +36,17 @@ interface PendingRide {
   user_id: string;
 }
 
+interface ActiveRide {
+  id: string;
+  ride_type: 'passenger' | 'goods';
+  pickup_location: string;
+  dropoff_location: string;
+  fare: number;
+  distance_km: number;
+  status: 'accepted' | 'in_progress';
+  user_name: string | null;
+}
+
 interface DriverData {
   id: string;
   is_available: boolean;
@@ -46,6 +62,7 @@ const DriverDashboard = () => {
   
   const [isOnline, setIsOnline] = useState(false);
   const [pendingRides, setPendingRides] = useState<PendingRide[]>([]);
+  const [activeRide, setActiveRide] = useState<ActiveRide | null>(null);
   const [driverData, setDriverData] = useState<DriverData | null>(null);
   const [loading, setLoading] = useState(true);
   const [processingRide, setProcessingRide] = useState<string | null>(null);
@@ -58,6 +75,7 @@ const DriverDashboard = () => {
     
     if (user) {
       fetchDriverData();
+      fetchActiveRide();
     }
   }, [user, authLoading]);
 
@@ -148,6 +166,47 @@ const DriverDashboard = () => {
     }
   };
 
+  const fetchActiveRide = async () => {
+    if (!driverData) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('rides')
+        .select(`
+          id,
+          ride_type,
+          pickup_location,
+          dropoff_location,
+          fare,
+          distance_km,
+          status,
+          profiles:user_id(full_name)
+        `)
+        .eq('driver_id', driverData.id)
+        .in('status', ['accepted', 'in_progress'])
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (data) {
+        setActiveRide({
+          id: data.id,
+          ride_type: data.ride_type,
+          pickup_location: data.pickup_location,
+          dropoff_location: data.dropoff_location,
+          fare: data.fare || 0,
+          distance_km: data.distance_km || 0,
+          status: data.status as 'accepted' | 'in_progress',
+          user_name: (data.profiles as any)?.full_name || 'Customer'
+        });
+      } else {
+        setActiveRide(null);
+      }
+    } catch (error) {
+      console.error('Error fetching active ride:', error);
+    }
+  };
+
   const handleToggleOnline = async () => {
     if (!driverData) return;
 
@@ -188,6 +247,23 @@ const DriverDashboard = () => {
 
     setProcessingRide(rideId);
     try {
+      // Get ride details first
+      const { data: rideData, error: fetchError } = await supabase
+        .from('rides')
+        .select(`
+          id,
+          ride_type,
+          pickup_location,
+          dropoff_location,
+          fare,
+          distance_km,
+          profiles:user_id(full_name)
+        `)
+        .eq('id', rideId)
+        .single();
+
+      if (fetchError) throw fetchError;
+
       const { error } = await supabase
         .from('rides')
         .update({ 
@@ -202,6 +278,18 @@ const DriverDashboard = () => {
 
       toast.success('Ride accepted! Navigate to pickup location.');
       setPendingRides(prev => prev.filter(r => r.id !== rideId));
+
+      // Set active ride
+      setActiveRide({
+        id: rideData.id,
+        ride_type: rideData.ride_type,
+        pickup_location: rideData.pickup_location,
+        dropoff_location: rideData.dropoff_location,
+        fare: rideData.fare || 0,
+        distance_km: rideData.distance_km || 0,
+        status: 'accepted',
+        user_name: (rideData.profiles as any)?.full_name || 'Customer'
+      });
 
       // Update driver stats
       await supabase
@@ -221,6 +309,68 @@ const DriverDashboard = () => {
       toast.error('Failed to accept ride');
     } finally {
       setProcessingRide(null);
+    }
+  };
+
+  const handleStartRide = async () => {
+    if (!activeRide || !driverData) return;
+
+    try {
+      const { error } = await supabase
+        .from('rides')
+        .update({ status: 'in_progress' })
+        .eq('id', activeRide.id);
+
+      if (error) throw error;
+
+      setActiveRide(prev => prev ? { ...prev, status: 'in_progress' } : null);
+      toast.success('Ride started!');
+
+      await supabase.from('activity_logs').insert({
+        user_id: user?.id,
+        action: 'Ride Started',
+        details: { ride_id: activeRide.id, driver_id: driverData.id }
+      });
+    } catch (error) {
+      console.error('Error starting ride:', error);
+      toast.error('Failed to start ride');
+    }
+  };
+
+  const handleFinishRide = async () => {
+    if (!activeRide || !driverData) return;
+
+    try {
+      const { error } = await supabase
+        .from('rides')
+        .update({ 
+          status: 'completed',
+          completed_at: new Date().toISOString()
+        })
+        .eq('id', activeRide.id);
+
+      if (error) throw error;
+
+      // Update earnings
+      await supabase
+        .from('drivers')
+        .update({ earnings: (driverData.earnings || 0) + activeRide.fare })
+        .eq('id', driverData.id);
+
+      toast.success('Ride completed! Fare collected: ₹' + activeRide.fare);
+      setActiveRide(null);
+      
+      // Refresh driver data
+      fetchDriverData();
+
+      await supabase.from('activity_logs').insert({
+        user_id: user?.id,
+        action: 'Ride Completed',
+        details: { ride_id: activeRide.id, driver_id: driverData.id, fare: activeRide.fare }
+      });
+    } catch (error) {
+      console.error('Error finishing ride:', error);
+      toast.error('Failed to complete ride');
     }
   };
 
@@ -318,8 +468,107 @@ const DriverDashboard = () => {
             )}
           </div>
 
+          {/* Active Ride Card */}
+          {activeRide && (
+            <div className="bg-gradient-card rounded-2xl border-2 border-primary shadow-elevated overflow-hidden mb-6 animate-scale-in">
+              <div className="bg-gradient-primary px-5 py-3 flex items-center justify-between">
+                <div className="flex items-center gap-2 text-primary-foreground">
+                  {activeRide.ride_type === 'passenger' ? (
+                    <User className="w-5 h-5" />
+                  ) : (
+                    <Package className="w-5 h-5" />
+                  )}
+                  <span className="font-semibold">
+                    {activeRide.status === 'accepted' ? 'Navigate to Pickup' : 'Ride in Progress'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1 text-primary-foreground/90 text-sm">
+                  <CheckCircle className="w-4 h-4" />
+                  <span>{activeRide.status === 'accepted' ? 'Accepted' : 'In Progress'}</span>
+                </div>
+              </div>
+
+              <div className="p-5 space-y-4">
+                {/* Customer Info */}
+                <div className="flex items-center gap-3 pb-4 border-b border-border/50">
+                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                    <User className="w-6 h-6 text-primary" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-semibold text-foreground">{activeRide.user_name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {activeRide.ride_type === 'passenger' ? 'Passenger' : 'Goods Delivery'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Locations */}
+                <div className="space-y-3">
+                  <div className="flex items-start gap-3">
+                    <div className="mt-1 p-1.5 rounded-full bg-primary/10">
+                      <Navigation className="w-4 h-4 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground font-medium uppercase">Pickup</p>
+                      <p className="text-foreground font-medium">{activeRide.pickup_location}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-start gap-3">
+                    <div className="mt-1 p-1.5 rounded-full bg-secondary/10">
+                      <MapPin className="w-4 h-4 text-secondary" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground font-medium uppercase">Drop</p>
+                      <p className="text-foreground font-medium">{activeRide.dropoff_location}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Stats */}
+                <div className="flex items-center justify-between py-4 px-4 bg-muted/50 rounded-xl">
+                  <div className="text-center">
+                    <p className="text-xs text-muted-foreground">Distance</p>
+                    <p className="font-bold text-foreground">{activeRide.distance_km} km</p>
+                  </div>
+                  <div className="w-px h-8 bg-border" />
+                  <div className="text-center">
+                    <p className="text-xs text-muted-foreground">Fare</p>
+                    <p className="font-bold text-foreground flex items-center">
+                      <IndianRupee className="w-4 h-4" />
+                      {activeRide.fare}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-3 pt-2">
+                  {activeRide.status === 'accepted' ? (
+                    <Button 
+                      variant="hero" 
+                      className="flex-1"
+                      onClick={handleStartRide}
+                    >
+                      <Navigation className="w-4 h-4 mr-2" />
+                      Start Ride
+                    </Button>
+                  ) : (
+                    <Button 
+                      variant="hero" 
+                      className="flex-1 bg-green-600 hover:bg-green-700"
+                      onClick={handleFinishRide}
+                    >
+                      <CheckCircle className="w-4 h-4 mr-2" />
+                      Finish Ride
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Pending Ride Requests */}
-          {isOnline && pendingRides.length > 0 && (
+          {isOnline && !activeRide && pendingRides.length > 0 && (
             <div className="space-y-4 mb-6">
               <h3 className="text-lg font-bold text-foreground">Ride Requests</h3>
               {pendingRides.map((ride) => (
