@@ -41,6 +41,21 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string; fullName?: string; phone?: string }>({});
 
+  // Demo credentials
+  const demoCredentials = {
+    user: { email: 'demouser@gramride.com', password: 'DemoUser@2025' },
+    driver: { email: 'demodriver@gramride.com', password: 'DemoDriver@2025' },
+    admin: { email: 'subasishmula@gmail.com', password: 'Subasish@2025' }
+  };
+
+  const fillDemoCredentials = () => {
+    const creds = demoCredentials[userType];
+    setEmail(creds.email);
+    setPassword(creds.password);
+    setAuthMethod('email');
+    setIsLogin(true);
+    toast.success(`Demo ${userType} credentials filled!`);
+  };
   useEffect(() => {
     if (user && !authLoading) {
       redirectBasedOnRole();
@@ -280,6 +295,17 @@ const Login = () => {
                   </button>
                 ))}
               </div>
+              
+              {/* Demo Credentials Button */}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full border-dashed border-2 text-muted-foreground hover:text-primary hover:border-primary"
+                onClick={fillDemoCredentials}
+              >
+                🎯 Use Demo {userType.charAt(0).toUpperCase() + userType.slice(1)} Credentials
+              </Button>
             </div>
 
             {/* Auth Method Toggle - Large Buttons */}
