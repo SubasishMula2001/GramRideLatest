@@ -292,17 +292,19 @@ const DriverDashboard = () => {
         }
       }
 
-      const { error } = await supabase
-        .from('rides')
-        .update({ 
-          driver_id: driverData.id,
-          status: 'accepted',
-          accepted_at: new Date().toISOString()
-        })
-        .eq('id', rideId)
-        .eq('status', 'pending');
+      // Use atomic RPC function to prevent race conditions
+      const { data: success, error } = await supabase.rpc('accept_ride', {
+        _ride_id: rideId,
+        _driver_id: driverData.id
+      });
 
       if (error) throw error;
+
+      if (!success) {
+        toast.error('This ride was already accepted by another driver');
+        setPendingRides(prev => prev.filter(r => r.id !== rideId));
+        return;
+      }
 
       toast.success('Ride accepted! Navigate to pickup location.');
       setPendingRides(prev => prev.filter(r => r.id !== rideId));
