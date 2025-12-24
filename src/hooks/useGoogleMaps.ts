@@ -23,10 +23,18 @@ export const useGoogleMaps = () => {
     isLoading = true;
     loadPromise = (async () => {
       try {
-        // Fetch API key from edge function
+        // Check if user is authenticated before fetching API key
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (!session) {
+          throw new Error('Authentication required to load maps');
+        }
+
+        // Fetch API key from edge function (requires authentication)
         const { data, error } = await supabase.functions.invoke('get-google-maps-key');
         
         if (error || !data?.apiKey) {
+          console.error('Failed to load Google Maps API key:', error);
           throw new Error('Failed to load Google Maps API key');
         }
 
@@ -45,6 +53,7 @@ export const useGoogleMaps = () => {
         isLoaded = true;
         setReady(true);
       } catch (err: any) {
+        console.error('Google Maps loading error:', err);
         setError(err.message);
         throw err;
       } finally {
