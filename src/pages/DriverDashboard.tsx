@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { 
   Power, 
   TrendingUp, 
@@ -8,16 +8,32 @@ import {
   IndianRupee, 
   Navigation,
   Bell,
-  User
+  User,
+  ArrowLeft,
+  LogOut
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import GramRideLogo from '@/components/GramRideLogo';
 import RideCard from '@/components/RideCard';
+import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
 
 const DriverDashboard = () => {
+  const navigate = useNavigate();
+  const { signOut } = useAuth();
   const [isOnline, setIsOnline] = useState(false);
   const [showRideRequest, setShowRideRequest] = useState(false);
+
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      toast.success('Logged out successfully');
+      navigate('/login');
+    } catch (error) {
+      toast.error('Failed to logout');
+    }
+  };
 
   const handleToggleOnline = () => {
     setIsOnline(!isOnline);
@@ -43,9 +59,16 @@ const DriverDashboard = () => {
       {/* Header */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border/50">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <GramRideLogo size="md" />
-          
           <div className="flex items-center gap-3">
+            <Button variant="ghost" size="icon" asChild>
+              <Link to="/">
+                <ArrowLeft className="w-5 h-5" />
+              </Link>
+            </Button>
+            <GramRideLogo size="md" />
+          </div>
+          
+          <div className="flex items-center gap-2">
             <Button variant="ghost" size="icon">
               <Bell className="w-5 h-5" />
             </Button>
@@ -53,6 +76,14 @@ const DriverDashboard = () => {
               <Link to="/driver/profile">
                 <User className="w-5 h-5" />
               </Link>
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="icon"
+              onClick={handleLogout}
+              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+            >
+              <LogOut className="w-5 h-5" />
             </Button>
           </div>
         </div>
