@@ -1,30 +1,38 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Mail, Lock, ArrowRight, User, Car, Loader2 } from 'lucide-react';
+import { Mail, Lock, ArrowRight, User, Car, Loader2, Phone, Smartphone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import GramRideLogo from '@/components/GramRideLogo';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { z } from 'zod';
 
 type UserType = 'user' | 'driver' | 'admin';
+type AuthMethod = 'email' | 'phone';
+type PhoneStep = 'enter' | 'verify';
 
 const emailSchema = z.string().email('Please enter a valid email address');
 const passwordSchema = z.string().min(6, 'Password must be at least 6 characters');
+const phoneSchema = z.string().regex(/^\+?[1-9]\d{9,14}$/, 'Please enter a valid phone number (e.g., +919876543210)');
 
 const Login = () => {
   const navigate = useNavigate();
-  const { signIn, signUp, user, loading: authLoading, userRole } = useAuth();
+  const { signIn, signUp, signInWithPhone, verifyPhoneOtp, user, loading: authLoading, userRole } = useAuth();
   
   const [userType, setUserType] = useState<UserType>('user');
+  const [authMethod, setAuthMethod] = useState<AuthMethod>('email');
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [otp, setOtp] = useState('');
+  const [phoneStep, setPhoneStep] = useState<PhoneStep>('enter');
   const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState<{ email?: string; password?: string; fullName?: string }>({});
+  const [errors, setErrors] = useState<{ email?: string; password?: string; fullName?: string; phone?: string }>({});
 
   // Redirect if already logged in
   useEffect(() => {
@@ -43,7 +51,7 @@ const Login = () => {
     }
   };
 
-  const validateForm = () => {
+  const validateEmailForm = () => {
     const newErrors: { email?: string; password?: string; fullName?: string } = {};
     
     try {
@@ -70,10 +78,25 @@ const Login = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const validatePhoneForm = () => {
+    const newErrors: { phone?: string } = {};
+    
+    try {
+      phoneSchema.parse(phone);
+    } catch (e) {
+      if (e instanceof z.ZodError) {
+        newErrors.phone = e.errors[0].message;
+      }
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!validateForm()) return;
+    if (!validateEmailForm()) return;
     
     setLoading(true);
     
@@ -110,6 +133,73 @@ const Login = () => {
       }
     } catch (error) {
       toast.error('An unexpected error occurred. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePhoneSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!validatePhoneForm()) return;
+    
+    setLoading(true);
+    
+    try {
+      const { error } = await signInWithPhone(phone);
+      
+      if (error) {
+        toast.error(error.message || 'Failed to send OTP. Please try again.');
+        return;
+      }
+      
+      setPhoneStep('verify');
+      toast.success('OTP sent to your phone!');
+    } catch (error) {
+      toast.error('An unexpected error occurred. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleOtpVerify = async () => {
+    if (otp.length !== 6) {
+      toast.error('Please enter a valid 6-digit OTP');
+      return;
+    }
+    
+    setLoading(true);
+    
+    try {
+      const { error } = await verifyPhoneOtp(phone, otp);
+      
+      if (error) {
+        toast.error(error.message || 'Invalid OTP. Please try again.');
+        return;
+      }
+      
+      toast.success('Welcome!');
+    } catch (error) {
+      toast.error('An unexpected error occurred. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    setLoading(true);
+    
+    try {
+      const { error } = await signInWithPhone(phone);
+      
+      if (error) {
+        toast.error('Failed to resend OTP. Please try again.');
+        return;
+      }
+      
+      toast.success('OTP resent successfully!');
+    } catch (error) {
+      toast.error('An unexpected error occurred.');
     } finally {
       setLoading(false);
     }
@@ -154,98 +244,241 @@ const Login = () => {
             </TabsList>
           </Tabs>
 
+          {/* Auth Method Toggle */}
+          <div className="flex gap-2 mb-6">
+            <Button
+              type="button"
+              variant={authMethod === 'email' ? 'default' : 'outline'}
+              className="flex-1"
+              onClick={() => {
+                setAuthMethod('email');
+                setPhoneStep('enter');
+                setErrors({});
+              }}
+            >
+              <Mail className="w-4 h-4 mr-2" />
+              Email
+            </Button>
+            <Button
+              type="button"
+              variant={authMethod === 'phone' ? 'default' : 'outline'}
+              className="flex-1"
+              onClick={() => {
+                setAuthMethod('phone');
+                setIsLogin(true);
+                setErrors({});
+              }}
+            >
+              <Smartphone className="w-4 h-4 mr-2" />
+              Phone OTP
+            </Button>
+          </div>
+
           <h2 className="text-2xl font-bold text-foreground mb-2">
-            {isLogin ? 'Welcome Back!' : 'Create Account'}
+            {authMethod === 'phone' 
+              ? (phoneStep === 'enter' ? 'Login with Phone' : 'Verify OTP')
+              : (isLogin ? 'Welcome Back!' : 'Create Account')
+            }
           </h2>
           <p className="text-muted-foreground mb-6">
-            {isLogin 
-              ? `Sign in to your ${userType} account` 
-              : `Register as a new ${userType}`
+            {authMethod === 'phone'
+              ? (phoneStep === 'enter' 
+                  ? 'We will send a verification code to your phone' 
+                  : `Enter the 6-digit code sent to ${phone}`
+                )
+              : (isLogin 
+                  ? `Sign in to your ${userType} account` 
+                  : `Register as a new ${userType}`
+                )
             }
           </p>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {!isLogin && (
+          {/* Email/Password Form */}
+          {authMethod === 'email' && (
+            <form onSubmit={handleEmailSubmit} className="space-y-4">
+              {!isLogin && (
+                <div>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                    <Input
+                      type="text"
+                      placeholder="Full Name"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      className="pl-11 h-12"
+                      disabled={loading}
+                    />
+                  </div>
+                  {errors.fullName && (
+                    <p className="text-destructive text-sm mt-1">{errors.fullName}</p>
+                  )}
+                </div>
+              )}
+
               <div>
                 <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                   <Input
-                    type="text"
-                    placeholder="Full Name"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
+                    type="email"
+                    placeholder="Email Address"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     className="pl-11 h-12"
                     disabled={loading}
                   />
                 </div>
-                {errors.fullName && (
-                  <p className="text-destructive text-sm mt-1">{errors.fullName}</p>
+                {errors.email && (
+                  <p className="text-destructive text-sm mt-1">{errors.email}</p>
                 )}
               </div>
-            )}
 
-            <div>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input
-                  type="email"
-                  placeholder="Email Address"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="pl-11 h-12"
-                  disabled={loading}
-                />
+              <div>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                  <Input
+                    type="password"
+                    placeholder="Password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="pl-11 h-12"
+                    disabled={loading}
+                  />
+                </div>
+                {errors.password && (
+                  <p className="text-destructive text-sm mt-1">{errors.password}</p>
+                )}
               </div>
-              {errors.email && (
-                <p className="text-destructive text-sm mt-1">{errors.email}</p>
-              )}
-            </div>
 
-            <div>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input
-                  type="password"
-                  placeholder="Password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="pl-11 h-12"
-                  disabled={loading}
-                />
+              <Button variant="hero" size="xl" className="w-full" disabled={loading}>
+                {loading ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <>
+                    {isLogin ? 'Sign In' : 'Create Account'}
+                    <ArrowRight className="w-5 h-5" />
+                  </>
+                )}
+              </Button>
+            </form>
+          )}
+
+          {/* Phone OTP Form */}
+          {authMethod === 'phone' && phoneStep === 'enter' && (
+            <form onSubmit={handlePhoneSubmit} className="space-y-4">
+              <div>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                  <Input
+                    type="tel"
+                    placeholder="+91 9876543210"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    className="pl-11 h-12"
+                    disabled={loading}
+                  />
+                </div>
+                {errors.phone && (
+                  <p className="text-destructive text-sm mt-1">{errors.phone}</p>
+                )}
+                <p className="text-xs text-muted-foreground mt-2">
+                  Enter your phone number with country code (e.g., +919876543210)
+                </p>
               </div>
-              {errors.password && (
-                <p className="text-destructive text-sm mt-1">{errors.password}</p>
-              )}
-            </div>
 
-            <Button variant="hero" size="xl" className="w-full" disabled={loading}>
-              {loading ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <>
-                  {isLogin ? 'Sign In' : 'Create Account'}
-                  <ArrowRight className="w-5 h-5" />
-                </>
-              )}
-            </Button>
-          </form>
+              <Button variant="hero" size="xl" className="w-full" disabled={loading}>
+                {loading ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <>
+                    Send OTP
+                    <ArrowRight className="w-5 h-5" />
+                  </>
+                )}
+              </Button>
+            </form>
+          )}
 
-          <div className="mt-6 text-center">
-            <p className="text-muted-foreground">
-              {isLogin ? "Don't have an account?" : 'Already have an account?'}
-              <button
-                type="button"
-                onClick={() => {
-                  setIsLogin(!isLogin);
-                  setErrors({});
-                }}
-                className="text-primary font-medium hover:underline ml-1"
-                disabled={loading}
+          {/* OTP Verification */}
+          {authMethod === 'phone' && phoneStep === 'verify' && (
+            <div className="space-y-6">
+              <div className="flex justify-center">
+                <InputOTP 
+                  maxLength={6} 
+                  value={otp} 
+                  onChange={setOtp}
+                  disabled={loading}
+                >
+                  <InputOTPGroup>
+                    <InputOTPSlot index={0} />
+                    <InputOTPSlot index={1} />
+                    <InputOTPSlot index={2} />
+                    <InputOTPSlot index={3} />
+                    <InputOTPSlot index={4} />
+                    <InputOTPSlot index={5} />
+                  </InputOTPGroup>
+                </InputOTP>
+              </div>
+
+              <Button 
+                variant="hero" 
+                size="xl" 
+                className="w-full" 
+                onClick={handleOtpVerify}
+                disabled={loading || otp.length !== 6}
               >
-                {isLogin ? 'Sign Up' : 'Sign In'}
-              </button>
-            </p>
-          </div>
+                {loading ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <>
+                    Verify & Login
+                    <ArrowRight className="w-5 h-5" />
+                  </>
+                )}
+              </Button>
+
+              <div className="flex justify-between items-center text-sm">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPhoneStep('enter');
+                    setOtp('');
+                  }}
+                  className="text-muted-foreground hover:text-foreground transition-colors"
+                  disabled={loading}
+                >
+                  ← Change Number
+                </button>
+                <button
+                  type="button"
+                  onClick={handleResendOtp}
+                  className="text-primary font-medium hover:underline"
+                  disabled={loading}
+                >
+                  Resend OTP
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Email Sign Up/In Toggle */}
+          {authMethod === 'email' && (
+            <div className="mt-6 text-center">
+              <p className="text-muted-foreground">
+                {isLogin ? "Don't have an account?" : 'Already have an account?'}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsLogin(!isLogin);
+                    setErrors({});
+                  }}
+                  className="text-primary font-medium hover:underline ml-1"
+                  disabled={loading}
+                >
+                  {isLogin ? 'Sign Up' : 'Sign In'}
+                </button>
+              </p>
+            </div>
+          )}
 
           {/* Demo Credentials */}
           <div className="mt-6 p-4 bg-primary/10 rounded-lg border border-primary/20">
