@@ -146,26 +146,8 @@ const BookRide = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-hero">
-      {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border/50">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            {(step === 'location' || step === 'confirm') && (
-              <Button variant="ghost" size="icon" onClick={handleBack}>
-                <ArrowLeft className="w-5 h-5" />
-              </Button>
-            )}
-            <GramRideLogo size="md" />
-          </div>
-          
-          <Button variant="ghost" asChild>
-            <Link to="/">Home</Link>
-          </Button>
-        </div>
-      </header>
-
-      <main className="pt-24 pb-12 px-4">
+    <div className="min-h-screen bg-gradient-hero pt-16">
+      <main className="pt-8 pb-12 px-4">
         <div className="container mx-auto max-w-lg">
           
           {/* Step: Select Type */}

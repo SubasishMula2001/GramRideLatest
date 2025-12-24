@@ -269,41 +269,8 @@ const DriverDashboard = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-hero">
-      {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border/50">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" asChild>
-              <Link to="/">
-                <ArrowLeft className="w-5 h-5" />
-              </Link>
-            </Button>
-            <GramRideLogo size="md" />
-          </div>
-          
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon">
-              <Bell className="w-5 h-5" />
-            </Button>
-            <Button variant="ghost" size="icon" asChild>
-              <Link to="/driver/profile">
-                <User className="w-5 h-5" />
-              </Link>
-            </Button>
-            <Button 
-              variant="ghost" 
-              size="icon"
-              onClick={handleLogout}
-              className="text-destructive hover:text-destructive hover:bg-destructive/10"
-            >
-              <LogOut className="w-5 h-5" />
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      <main className="pt-24 pb-12 px-4">
+    <div className="min-h-screen bg-gradient-hero pt-16">
+      <main className="pt-8 pb-12 px-4">
         <div className="container mx-auto max-w-lg">
           
           {/* Verification Warning */}

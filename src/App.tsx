@@ -4,6 +4,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
+import ProtectedRoute from "@/components/ProtectedRoute";
+import Navbar from "@/components/Navbar";
 import Index from "./pages/Index";
 import BookRide from "./pages/BookRide";
 import DriverDashboard from "./pages/DriverDashboard";
@@ -13,6 +15,7 @@ import Login from "./pages/Login";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminUsers from "./pages/admin/AdminUsers";
 import AdminDrivers from "./pages/admin/AdminDrivers";
+import AdminRides from "./pages/admin/AdminRides";
 import AdminLogs from "./pages/admin/AdminLogs";
 import NotFound from "./pages/NotFound";
 
@@ -25,17 +28,62 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
+          <Navbar />
           <Routes>
             <Route path="/" element={<Index />} />
-            <Route path="/book" element={<BookRide />} />
-            <Route path="/driver" element={<DriverDashboard />} />
-            <Route path="/driver/profile" element={<DriverProfile />} />
-            <Route path="/profile" element={<UserProfile />} />
             <Route path="/login" element={<Login />} />
-            <Route path="/admin" element={<AdminDashboard />} />
-            <Route path="/admin/users" element={<AdminUsers />} />
-            <Route path="/admin/drivers" element={<AdminDrivers />} />
-            <Route path="/admin/logs" element={<AdminLogs />} />
+            
+            {/* User Routes */}
+            <Route path="/book" element={
+              <ProtectedRoute allowedRoles={['user']}>
+                <BookRide />
+              </ProtectedRoute>
+            } />
+            <Route path="/profile" element={
+              <ProtectedRoute allowedRoles={['user']}>
+                <UserProfile />
+              </ProtectedRoute>
+            } />
+            
+            {/* Driver Routes */}
+            <Route path="/driver" element={
+              <ProtectedRoute allowedRoles={['driver']}>
+                <DriverDashboard />
+              </ProtectedRoute>
+            } />
+            <Route path="/driver/profile" element={
+              <ProtectedRoute allowedRoles={['driver']}>
+                <DriverProfile />
+              </ProtectedRoute>
+            } />
+            
+            {/* Admin Routes */}
+            <Route path="/admin" element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <AdminDashboard />
+              </ProtectedRoute>
+            } />
+            <Route path="/admin/users" element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <AdminUsers />
+              </ProtectedRoute>
+            } />
+            <Route path="/admin/drivers" element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <AdminDrivers />
+              </ProtectedRoute>
+            } />
+            <Route path="/admin/rides" element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <AdminRides />
+              </ProtectedRoute>
+            } />
+            <Route path="/admin/logs" element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <AdminLogs />
+              </ProtectedRoute>
+            } />
+            
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

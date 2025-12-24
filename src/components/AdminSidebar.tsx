@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   Users, 
@@ -12,20 +12,25 @@ import {
   Bell
 } from 'lucide-react';
 import GramRideLogo from './GramRideLogo';
+import { useAuth } from '@/contexts/AuthContext';
 
 const navItems = [
   { path: '/admin', icon: LayoutDashboard, label: 'Dashboard', exact: true },
   { path: '/admin/users', icon: Users, label: 'Users' },
   { path: '/admin/drivers', icon: Car, label: 'Drivers' },
   { path: '/admin/rides', icon: Activity, label: 'Rides' },
-  { path: '/admin/earnings', icon: DollarSign, label: 'Earnings' },
   { path: '/admin/logs', icon: FileText, label: 'Activity Logs' },
-  { path: '/admin/notifications', icon: Bell, label: 'Notifications' },
-  { path: '/admin/settings', icon: Settings, label: 'Settings' },
 ];
 
 const AdminSidebar: React.FC = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { signOut } = useAuth();
+
+  const handleLogout = async () => {
+    await signOut();
+    navigate('/login');
+  };
 
   return (
     <aside className="fixed left-0 top-0 h-screen w-64 bg-sidebar border-r border-sidebar-border flex flex-col z-50">
@@ -62,7 +67,10 @@ const AdminSidebar: React.FC = () => {
 
       {/* Logout */}
       <div className="p-4 border-t border-sidebar-border">
-        <button className="flex items-center gap-3 px-4 py-3 rounded-xl font-medium text-destructive hover:bg-destructive/10 w-full transition-colors">
+        <button 
+          onClick={handleLogout}
+          className="flex items-center gap-3 px-4 py-3 rounded-xl font-medium text-destructive hover:bg-destructive/10 w-full transition-colors"
+        >
           <LogOut className="w-5 h-5" />
           <span>Logout</span>
         </button>

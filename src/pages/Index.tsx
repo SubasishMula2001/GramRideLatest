@@ -23,49 +23,7 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-hero">
-      {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border/50">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <GramRideLogo size="md" />
-          
-          <nav className="hidden md:flex items-center gap-6">
-            <Link to="/" className="text-foreground font-medium hover:text-primary transition-colors">Home</Link>
-            <Link to="/book" className="text-muted-foreground font-medium hover:text-primary transition-colors">Book Ride</Link>
-            <Link to="/driver" className="text-muted-foreground font-medium hover:text-primary transition-colors">Drive</Link>
-            {userRole === 'admin' && (
-              <Link to="/admin" className="text-muted-foreground font-medium hover:text-primary transition-colors">Admin</Link>
-            )}
-          </nav>
-
-          <div className="flex items-center gap-3">
-            {user ? (
-              <>
-                <Button variant="ghost" size="icon" asChild>
-                  <Link to="/profile">
-                    <User className="w-5 h-5" />
-                  </Link>
-                </Button>
-                <Button 
-                  variant="ghost" 
-                  size="icon"
-                  onClick={handleLogout}
-                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                >
-                  <LogOut className="w-5 h-5" />
-                </Button>
-              </>
-            ) : (
-              <Button variant="ghost" asChild>
-                <Link to="/login">Login</Link>
-              </Button>
-            )}
-            <Button variant="hero" asChild>
-              <Link to="/book">Book Now</Link>
-            </Button>
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen bg-gradient-hero pt-16">
 
       {/* Hero Section */}
       <section className="pt-32 pb-20 px-4">
