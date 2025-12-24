@@ -249,6 +249,10 @@ export type Database = {
       }
     }
     Functions: {
+      accept_ride: {
+        Args: { _driver_id: string; _ride_id: string }
+        Returns: boolean
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
