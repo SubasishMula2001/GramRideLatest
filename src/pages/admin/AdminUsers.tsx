@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Plus, Filter, MoreVertical, User, Loader2, Trash2 } from 'lucide-react';
+import { Search, Plus, Filter, Edit, User, Loader2 } from 'lucide-react';
 import AdminSidebar from '@/components/AdminSidebar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,6 +14,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -37,8 +44,12 @@ const AdminUsers = () => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<UserData | null>(null);
   const [newUser, setNewUser] = useState({ full_name: '', phone: '', email: '', password: '' });
+  const [editForm, setEditForm] = useState({ full_name: '', phone: '', role: '' });
   const [addingUser, setAddingUser] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
 
   useEffect(() => {
     if (!authLoading) {
@@ -146,6 +157,54 @@ const AdminUsers = () => {
     }
   };
 
+  const handleEditUser = (userData: UserData) => {
+    setEditingUser(userData);
+    setEditForm({
+      full_name: userData.full_name || '',
+      phone: userData.phone || '',
+      role: userData.role
+    });
+    setIsEditDialogOpen(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingUser) return;
+
+    setSavingEdit(true);
+    try {
+      // Update profile
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({
+          full_name: editForm.full_name || null,
+          phone: editForm.phone || null
+        })
+        .eq('id', editingUser.id);
+
+      if (profileError) throw profileError;
+
+      // Update role if changed
+      if (editForm.role !== editingUser.role) {
+        const { error: roleError } = await supabase
+          .from('user_roles')
+          .update({ role: editForm.role as 'admin' | 'user' | 'driver' })
+          .eq('user_id', editingUser.id);
+
+        if (roleError) throw roleError;
+      }
+
+      toast.success('User updated successfully');
+      setIsEditDialogOpen(false);
+      setEditingUser(null);
+      fetchUsers();
+    } catch (error: any) {
+      console.error('Error updating user:', error);
+      toast.error(error.message || 'Failed to update user');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   const filteredUsers = users.filter(u => 
     u.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     u.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -183,9 +242,9 @@ const AdminUsers = () => {
     { 
       key: 'actions', 
       header: '',
-      render: () => (
-        <Button variant="ghost" size="icon">
-          <MoreVertical className="w-4 h-4" />
+      render: (item: UserData) => (
+        <Button variant="ghost" size="icon" onClick={() => handleEditUser(item)}>
+          <Edit className="w-4 h-4" />
         </Button>
       )
     },
@@ -288,6 +347,69 @@ const AdminUsers = () => {
             </DialogContent>
           </Dialog>
         </div>
+
+        {/* Edit User Dialog */}
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Edit User</DialogTitle>
+              <DialogDescription>
+                Update user information
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-4 mt-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-name">Full Name</Label>
+                <Input 
+                  id="edit-name" 
+                  placeholder="Enter full name"
+                  value={editForm.full_name}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, full_name: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-phone">Phone Number</Label>
+                <Input 
+                  id="edit-phone" 
+                  placeholder="+91 XXXXX XXXXX"
+                  value={editForm.phone}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, phone: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-role">Role</Label>
+                <Select 
+                  value={editForm.role} 
+                  onValueChange={(value) => setEditForm(prev => ({ ...prev, role: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="user">User</SelectItem>
+                    <SelectItem value="driver">Driver</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="flex gap-3 pt-4">
+                <Button variant="outline" className="flex-1" onClick={() => setIsEditDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button 
+                  variant="hero" 
+                  className="flex-1" 
+                  onClick={handleSaveEdit}
+                  disabled={savingEdit}
+                >
+                  {savingEdit ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save Changes'}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Filters */}
         <div className="flex items-center gap-4 mb-6">

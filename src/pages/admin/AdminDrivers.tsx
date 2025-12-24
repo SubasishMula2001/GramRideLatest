@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Plus, Filter, MoreVertical, Car, Star, CheckCircle, Loader2 } from 'lucide-react';
+import { Search, Plus, Filter, Edit, Car, Star, CheckCircle, Loader2 } from 'lucide-react';
 import AdminSidebar from '@/components/AdminSidebar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,6 +15,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -42,6 +43,8 @@ const AdminDrivers = () => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editingDriver, setEditingDriver] = useState<DriverData | null>(null);
   const [newDriver, setNewDriver] = useState({ 
     full_name: '', 
     email: '', 
@@ -50,7 +53,16 @@ const AdminDrivers = () => {
     vehicle_number: '', 
     license_number: '' 
   });
+  const [editForm, setEditForm] = useState({
+    full_name: '',
+    phone: '',
+    vehicle_number: '',
+    license_number: '',
+    is_verified: false,
+    is_available: false
+  });
   const [addingDriver, setAddingDriver] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
 
   useEffect(() => {
     if (!authLoading) {
@@ -160,20 +172,57 @@ const AdminDrivers = () => {
     }
   };
 
-  const handleVerifyDriver = async (driverId: string, currentStatus: boolean) => {
+  const handleEditDriver = (driverData: DriverData) => {
+    setEditingDriver(driverData);
+    setEditForm({
+      full_name: driverData.full_name || '',
+      phone: driverData.phone || '',
+      vehicle_number: driverData.vehicle_number,
+      license_number: driverData.license_number || '',
+      is_verified: driverData.is_verified,
+      is_available: driverData.is_available
+    });
+    setIsEditDialogOpen(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingDriver) return;
+
+    setSavingEdit(true);
     try {
-      const { error } = await supabase
+      // Update profile
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({
+          full_name: editForm.full_name || null,
+          phone: editForm.phone || null
+        })
+        .eq('id', editingDriver.user_id);
+
+      if (profileError) throw profileError;
+
+      // Update driver record
+      const { error: driverError } = await supabase
         .from('drivers')
-        .update({ is_verified: !currentStatus })
-        .eq('id', driverId);
+        .update({
+          vehicle_number: editForm.vehicle_number,
+          license_number: editForm.license_number || null,
+          is_verified: editForm.is_verified,
+          is_available: editForm.is_available
+        })
+        .eq('id', editingDriver.id);
 
-      if (error) throw error;
+      if (driverError) throw driverError;
 
-      toast.success(currentStatus ? 'Driver unverified' : 'Driver verified');
+      toast.success('Driver updated successfully');
+      setIsEditDialogOpen(false);
+      setEditingDriver(null);
       fetchDrivers();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating driver:', error);
-      toast.error('Failed to update driver');
+      toast.error(error.message || 'Failed to update driver');
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -248,10 +297,10 @@ const AdminDrivers = () => {
       render: (item: DriverData) => (
         <Button 
           variant="ghost" 
-          size="sm"
-          onClick={() => handleVerifyDriver(item.id, item.is_verified)}
+          size="icon"
+          onClick={() => handleEditDriver(item)}
         >
-          {item.is_verified ? 'Unverify' : 'Verify'}
+          <Edit className="w-4 h-4" />
         </Button>
       )
     },
@@ -365,6 +414,87 @@ const AdminDrivers = () => {
             </DialogContent>
           </Dialog>
         </div>
+
+        {/* Edit Driver Dialog */}
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Edit Driver</DialogTitle>
+              <DialogDescription>
+                Update driver information
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-4 mt-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-name">Full Name</Label>
+                <Input 
+                  id="edit-name" 
+                  placeholder="Enter full name"
+                  value={editForm.full_name}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, full_name: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-phone">Phone Number</Label>
+                <Input 
+                  id="edit-phone" 
+                  placeholder="+91 XXXXX XXXXX"
+                  value={editForm.phone}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, phone: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-vehicle">Vehicle Number</Label>
+                <Input 
+                  id="edit-vehicle" 
+                  placeholder="WB XX X XXXX"
+                  value={editForm.vehicle_number}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, vehicle_number: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-license">License Number</Label>
+                <Input 
+                  id="edit-license" 
+                  placeholder="Enter license number"
+                  value={editForm.license_number}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, license_number: e.target.value }))}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="edit-verified">Verified</Label>
+                <Switch
+                  id="edit-verified"
+                  checked={editForm.is_verified}
+                  onCheckedChange={(checked) => setEditForm(prev => ({ ...prev, is_verified: checked }))}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="edit-available">Available</Label>
+                <Switch
+                  id="edit-available"
+                  checked={editForm.is_available}
+                  onCheckedChange={(checked) => setEditForm(prev => ({ ...prev, is_available: checked }))}
+                />
+              </div>
+              
+              <div className="flex gap-3 pt-4">
+                <Button variant="outline" className="flex-1" onClick={() => setIsEditDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button 
+                  variant="hero" 
+                  className="flex-1" 
+                  onClick={handleSaveEdit}
+                  disabled={savingEdit}
+                >
+                  {savingEdit ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save Changes'}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Filters */}
         <div className="flex items-center gap-4 mb-6">
