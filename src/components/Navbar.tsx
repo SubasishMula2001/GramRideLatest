@@ -1,7 +1,9 @@
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import GramRideLogo from './GramRideLogo';
+import LanguageToggle from './LanguageToggle';
 import { Button } from '@/components/ui/button';
 import { 
   Home, 
@@ -17,6 +19,7 @@ import { useState } from 'react';
 
 const Navbar: React.FC = () => {
   const { user, userRole, signOut, loading } = useAuth();
+  const { t } = useLanguage();
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -93,14 +96,15 @@ const Navbar: React.FC = () => {
             ))}
           </div>
 
-          {/* Auth Buttons */}
+          {/* Auth Buttons & Language Toggle */}
           <div className="hidden md:flex items-center gap-4">
+            <LanguageToggle size="sm" showLabel={false} />
             {loading ? (
               <div className="w-8 h-8 rounded-full bg-muted animate-pulse" />
             ) : user ? (
               <div className="flex items-center gap-4">
                 <span className="text-sm text-muted-foreground capitalize">
-                  {userRole}
+                  {userRole === 'user' ? t.user : userRole === 'driver' ? t.driver : t.admin}
                 </span>
                 <Button
                   variant="ghost"
@@ -109,13 +113,13 @@ const Navbar: React.FC = () => {
                   className="text-destructive hover:text-destructive hover:bg-destructive/10"
                 >
                   <LogOut className="w-4 h-4 mr-2" />
-                  Sign Out
+                  {t.signIn === 'লগইন করুন' ? 'বাহির' : 'Sign Out'}
                 </Button>
               </div>
             ) : (
               <Link to="/login">
                 <Button variant="hero" size="sm">
-                  Sign In
+                  {t.signIn}
                 </Button>
               </Link>
             )}
@@ -154,6 +158,11 @@ const Navbar: React.FC = () => {
                 </Link>
               ))}
               
+              {/* Language toggle in mobile menu */}
+              <div className="px-4 py-2">
+                <LanguageToggle size="sm" />
+              </div>
+              
               {user ? (
                 <button
                   onClick={() => {
@@ -163,7 +172,7 @@ const Navbar: React.FC = () => {
                   className="flex items-center gap-2 px-4 py-3 rounded-lg font-medium text-destructive hover:bg-destructive/10 transition-colors"
                 >
                   <LogOut className="w-5 h-5" />
-                  Sign Out
+                  {t.signIn === 'লগইন করুন' ? 'বাহির' : 'Sign Out'}
                 </button>
               ) : (
                 <Link
@@ -171,7 +180,7 @@ const Navbar: React.FC = () => {
                   onClick={() => setMobileMenuOpen(false)}
                   className="flex items-center gap-2 px-4 py-3 rounded-lg font-medium bg-primary text-primary-foreground"
                 >
-                  Sign In
+                  {t.signIn}
                 </Link>
               )}
             </div>
