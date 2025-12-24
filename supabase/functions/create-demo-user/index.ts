@@ -22,21 +22,95 @@ const handler = async (req: Request): Promise<Response> => {
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+
+    // First, verify the caller is an authenticated admin
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      console.error("No authorization header provided");
+      return new Response(
+        JSON.stringify({ error: "Unauthorized - No authorization header" }),
+        { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    // Create a client with the user's auth token to verify their identity
+    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
       auth: {
         autoRefreshToken: false,
         persistSession: false,
       },
     });
 
+    // Get the authenticated user
+    const { data: { user: callerUser }, error: userError } = await userClient.auth.getUser();
+    if (userError || !callerUser) {
+      console.error("Failed to get user:", userError);
+      return new Response(
+        JSON.stringify({ error: "Unauthorized - Invalid token" }),
+        { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    console.log(`Request from user: ${callerUser.id}`);
+
+    // Use service role client to check admin role (bypasses RLS)
+    const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    });
+
+    // Check if the caller has admin role
+    const { data: roleData, error: roleError } = await adminClient
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', callerUser.id)
+      .eq('role', 'admin')
+      .single();
+
+    if (roleError || !roleData) {
+      console.error("User is not an admin:", callerUser.id);
+      return new Response(
+        JSON.stringify({ error: "Forbidden - Admin access required" }),
+        { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    console.log("Admin verified, proceeding with user creation");
+
     const { email, password, fullName, role, vehicleNumber, licenseNumber }: CreateDemoUserRequest = await req.json();
 
-    console.log(`Creating demo user: ${email} with role: ${role}`);
+    // Input validation
+    if (!email || !password) {
+      return new Response(
+        JSON.stringify({ error: "Email and password are required" }),
+        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    if (password.length < 6) {
+      return new Response(
+        JSON.stringify({ error: "Password must be at least 6 characters" }),
+        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    const validRoles = ['admin', 'user', 'driver'];
+    if (!validRoles.includes(role)) {
+      return new Response(
+        JSON.stringify({ error: "Invalid role specified" }),
+        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    console.log(`Creating user: ${email} with role: ${role}`);
 
     // Create user with admin API
-    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+    const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
@@ -62,19 +136,19 @@ const handler = async (req: Request): Promise<Response> => {
 
     // Update user role if not 'user' (default)
     if (role !== 'user') {
-      const { error: roleError } = await supabase
+      const { error: roleUpdateError } = await adminClient
         .from('user_roles')
         .update({ role })
         .eq('user_id', userId);
 
-      if (roleError) {
-        console.error("Role update error:", roleError);
+      if (roleUpdateError) {
+        console.error("Role update error:", roleUpdateError);
       }
     }
 
     // If driver, create driver record
     if (role === 'driver' && vehicleNumber) {
-      const { error: driverError } = await supabase
+      const { error: driverError } = await adminClient
         .from('drivers')
         .insert({
           user_id: userId,
@@ -89,12 +163,12 @@ const handler = async (req: Request): Promise<Response> => {
       }
     }
 
-    console.log(`Demo user created successfully: ${email}`);
+    console.log(`User created successfully: ${email}`);
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: `Demo ${role} created successfully`,
+        message: `${role} created successfully`,
         email,
         userId 
       }),
