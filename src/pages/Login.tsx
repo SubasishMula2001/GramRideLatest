@@ -15,7 +15,12 @@ type AuthMethod = 'email' | 'phone';
 type PhoneStep = 'enter' | 'verify';
 
 const emailSchema = z.string().email('Please enter a valid email address');
-const passwordSchema = z.string().min(6, 'Password must be at least 6 characters');
+const passwordSchema = z.string()
+  .min(8, 'Password must be at least 8 characters')
+  .regex(/[A-Z]/, 'Must contain at least one uppercase letter')
+  .regex(/[a-z]/, 'Must contain at least one lowercase letter')
+  .regex(/[0-9]/, 'Must contain at least one number')
+  .regex(/[^A-Za-z0-9]/, 'Must contain at least one special character');
 const phoneSchema = z.string().regex(/^\+?[1-9]\d{9,14}$/, 'Please enter a valid phone number (e.g., +919876543210)');
 
 const Login = () => {
@@ -480,13 +485,16 @@ const Login = () => {
             </div>
           )}
 
-          {/* Demo Credentials */}
-          <div className="mt-6 p-4 bg-primary/10 rounded-lg border border-primary/20">
-            <h3 className="font-semibold text-sm text-foreground mb-2">Demo Credentials:</h3>
+          {/* Demo Credentials - For Testing Only */}
+          <div className="mt-6 p-4 bg-secondary/10 rounded-lg border border-secondary/20">
+            <h3 className="font-semibold text-sm text-foreground mb-2">⚠️ Demo Mode (Testing Only):</h3>
+            <p className="text-xs text-muted-foreground mb-2">
+              These demo accounts are for testing purposes only and should not be used in production.
+            </p>
             <div className="text-xs text-muted-foreground space-y-1">
-              <p><strong>User:</strong> user@gramride.com / password123</p>
-              <p><strong>Driver:</strong> driver@gramride.com / password123</p>
-              <p><strong>Admin:</strong> admin@gramride.com / password123</p>
+              <p><strong>User:</strong> user@gramride.com / Demo@Pass123!</p>
+              <p><strong>Driver:</strong> driver@gramride.com / Demo@Pass123!</p>
+              <p><strong>Admin:</strong> admin@gramride.com / Demo@Pass123!</p>
             </div>
           </div>
         </div>
