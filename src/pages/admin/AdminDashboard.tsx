@@ -72,33 +72,55 @@ const AdminDashboard = () => {
         todayRevenue
       });
 
-      // Fetch recent rides with user and driver info
-      const { data: rides } = await supabase
+      // Fetch recent rides (no embedded joins; fetch names separately)
+      const { data: rides, error: ridesError } = await supabase
         .from('rides')
-        .select(`
-          id,
-          ride_type,
-          status,
-          fare,
-          created_at,
-          profiles:user_id(full_name),
-          drivers:driver_id(
-            profiles:user_id(full_name)
-          )
-        `)
+        .select('id, ride_type, status, fare, created_at, user_id, driver_id')
         .order('created_at', { ascending: false })
         .limit(10);
 
+      if (ridesError) throw ridesError;
+
+      const userIds = Array.from(new Set((rides || []).map((r: any) => r.user_id).filter(Boolean))) as string[];
+      const driverIds = Array.from(new Set((rides || []).map((r: any) => r.driver_id).filter(Boolean))) as string[];
+
+      const userProfilesResult = userIds.length
+        ? await supabase.from('profiles').select('id, full_name').in('id', userIds)
+        : { data: [], error: null };
+
+      const userProfiles = userProfilesResult.data as any[];
+      const userNameById = new Map<string, string>((userProfiles || []).map((p: any) => [p.id, p.full_name || 'Unknown']));
+
+      const driversResult2 = driverIds.length
+        ? await supabase.from('drivers').select('id, user_id').in('id', driverIds)
+        : { data: [], error: null };
+
+      const drivers = driversResult2.data as any[];
+      const driverById = new Map<string, any>((drivers || []).map((d: any) => [d.id, d]));
+      const driverUserIds = Array.from(new Set((drivers || []).map((d: any) => d.user_id).filter(Boolean))) as string[];
+
+      const driverProfilesResult = driverUserIds.length
+        ? await supabase.from('profiles').select('id, full_name').in('id', driverUserIds)
+        : { data: [], error: null };
+
+      const driverProfiles = driverProfilesResult.data as any[];
+      const driverNameByUserId = new Map<string, string>((driverProfiles || []).map((p: any) => [p.id, p.full_name || 'Unknown Driver']));
+
       if (rides) {
-        const formattedRides = rides.map(ride => ({
-          id: ride.id.slice(0, 8).toUpperCase(),
-          user_name: (ride.profiles as any)?.full_name || 'Unknown',
-          driver_name: (ride.drivers as any)?.profiles?.full_name || 'Not assigned',
-          ride_type: ride.ride_type === 'passenger' ? 'Passenger' : 'Goods',
-          status: ride.status,
-          fare: ride.fare || 0,
-          created_at: getTimeAgo(new Date(ride.created_at))
-        }));
+        const formattedRides = rides.map((ride: any) => {
+          const driver = ride.driver_id ? driverById.get(ride.driver_id) : null;
+          const driverName = driver?.user_id ? driverNameByUserId.get(driver.user_id) : null;
+
+          return {
+            id: ride.id.slice(0, 8).toUpperCase(),
+            user_name: (ride.user_id && userNameById.get(ride.user_id)) || 'Unknown',
+            driver_name: driverName || 'Not assigned',
+            ride_type: ride.ride_type === 'passenger' ? 'Passenger' : 'Goods',
+            status: ride.status,
+            fare: ride.fare || 0,
+            created_at: getTimeAgo(new Date(ride.created_at))
+          };
+        });
         setRecentRides(formattedRides);
       }
 
@@ -107,7 +129,7 @@ const AdminDashboard = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }; 
 
   const getTimeAgo = (date: Date) => {
     const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);

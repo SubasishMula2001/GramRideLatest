@@ -69,14 +69,33 @@ const AdminLogs = () => {
           ip_address,
           device_info,
           created_at,
-          profiles:user_id(full_name)
+          user_id
         `)
         .order('created_at', { ascending: false })
         .limit(100);
 
       if (error) throw error;
 
-      const formattedLogs = (data || []).map(log => {
+      const userIds = Array.from(
+        new Set((data || []).map((l: any) => l.user_id).filter(Boolean))
+      ) as string[];
+
+      const profilesResult = userIds.length
+        ? await supabase.from('profiles').select('id, full_name').in('id', userIds)
+        : { data: [], error: null };
+
+      const profiles = profilesResult.data as any[];
+      const profilesError = profilesResult.error;
+
+      if (profilesError) {
+        console.error('Error fetching log user profiles:', profilesError);
+      }
+
+      const nameByUserId = new Map<string, string>(
+        (profiles || []).map((p: any) => [p.id, p.full_name || 'System'])
+      );
+
+      const formattedLogs = (data || []).map((log: any) => {
         // Determine type from action
         let type = 'Activity';
         if (log.action.toLowerCase().includes('login') || log.action.toLowerCase().includes('logout')) {
@@ -91,7 +110,7 @@ const AdminLogs = () => {
           id: log.id,
           timestamp: new Date(log.created_at).toLocaleString('en-IN'),
           type,
-          user_name: (log.profiles as any)?.full_name || 'System',
+          user_name: (log.user_id && nameByUserId.get(log.user_id)) || 'System',
           action: log.action,
           ip_address: log.ip_address,
           device_info: log.device_info,
