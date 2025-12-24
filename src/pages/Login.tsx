@@ -43,9 +43,9 @@ const Login = () => {
 
   // Demo credentials
   const demoCredentials = {
-    user: { email: 'demouser@gramride.com', password: 'DemoUser@2025' },
-    driver: { email: 'demodriver@gramride.com', password: 'DemoDriver@2025' },
-    admin: { email: 'subasishmula@gmail.com', password: 'Subasish@2025' }
+    user: { email: 'user@gramride.com', password: 'Demo@Pass123!' },
+    driver: { email: 'driver@gramride.com', password: 'Demo@Pass123!' },
+    admin: { email: 'admin@gramride.com', password: 'Demo@Pass123!' }
   };
 
   const fillDemoCredentials = () => {
