@@ -54,17 +54,33 @@ const AdminUsers = () => {
     try {
       const { data: profiles, error } = await supabase
         .from('profiles')
-        .select(`
-          id,
-          full_name,
-          phone,
-          email,
-          created_at,
-          user_roles(role)
-        `)
+        .select('id, full_name, phone, email, created_at')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
+
+      const profileIds = (profiles || []).map((p) => p.id);
+
+      const rolesResult = profileIds.length
+        ? await supabase.from('user_roles').select('user_id, role').in('user_id', profileIds)
+        : { data: [], error: null };
+
+      const rolesData = rolesResult.data as any[];
+      const rolesError = rolesResult.error;
+
+      if (rolesError) {
+        console.error('Error fetching user roles:', rolesError);
+      }
+
+      const roleRank: Record<string, number> = { user: 1, driver: 2, admin: 3 };
+      const roleByUserId = new Map<string, string>();
+
+      (rolesData || []).forEach((r: any) => {
+        const prev = roleByUserId.get(r.user_id);
+        if (!prev || roleRank[r.role] > roleRank[prev]) {
+          roleByUserId.set(r.user_id, r.role);
+        }
+      });
 
       // Get ride counts for each user
       const usersWithCounts = await Promise.all(
@@ -79,7 +95,7 @@ const AdminUsers = () => {
             full_name: profile.full_name,
             phone: profile.phone,
             email: profile.email,
-            role: (profile.user_roles as any)?.[0]?.role || 'user',
+            role: roleByUserId.get(profile.id) || 'user',
             created_at: new Date(profile.created_at).toLocaleDateString('en-IN', {
               day: 'numeric',
               month: 'short',

@@ -76,31 +76,47 @@ const AdminDrivers = () => {
           earnings,
           is_available,
           is_verified,
-          created_at,
-          profiles:user_id(full_name, phone)
+          created_at
         `)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
 
-      const formattedDrivers = (data || []).map(driver => ({
-        id: driver.id,
-        user_id: driver.user_id,
-        full_name: (driver.profiles as any)?.full_name || 'Unknown',
-        phone: (driver.profiles as any)?.phone || '--',
-        vehicle_number: driver.vehicle_number,
-        license_number: driver.license_number,
-        rating: driver.rating || 5.0,
-        total_rides: driver.total_rides || 0,
-        earnings: driver.earnings || 0,
-        is_available: driver.is_available,
-        is_verified: driver.is_verified,
-        created_at: new Date(driver.created_at).toLocaleDateString('en-IN', {
-          day: 'numeric',
-          month: 'short',
-          year: 'numeric'
-        })
-      }));
+      const userIds = Array.from(new Set((data || []).map((d) => d.user_id)));
+      const profilesResult = userIds.length
+        ? await supabase.from('profiles').select('id, full_name, phone').in('id', userIds)
+        : { data: [], error: null };
+
+      const profiles = profilesResult.data as any[];
+      const profilesError = profilesResult.error;
+
+      if (profilesError) {
+        console.error('Error fetching driver profiles:', profilesError);
+      }
+
+      const profileById = new Map<string, any>((profiles || []).map((p: any) => [p.id, p]));
+
+      const formattedDrivers = (data || []).map((driver: any) => {
+        const p = profileById.get(driver.user_id);
+        return {
+          id: driver.id,
+          user_id: driver.user_id,
+          full_name: p?.full_name || 'Unknown',
+          phone: p?.phone || '--',
+          vehicle_number: driver.vehicle_number,
+          license_number: driver.license_number,
+          rating: driver.rating || 5.0,
+          total_rides: driver.total_rides || 0,
+          earnings: driver.earnings || 0,
+          is_available: driver.is_available,
+          is_verified: driver.is_verified,
+          created_at: new Date(driver.created_at).toLocaleDateString('en-IN', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric'
+          })
+        };
+      });
 
       setDrivers(formattedDrivers);
     } catch (error) {

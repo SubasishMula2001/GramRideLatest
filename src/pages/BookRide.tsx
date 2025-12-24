@@ -86,28 +86,27 @@ const BookRide = () => {
 
   const fetchDriverInfo = async (driverId: string) => {
     try {
-      const { data, error } = await supabase
+      const { data: driver, error: driverError } = await supabase
         .from('drivers')
-        .select(`
-          vehicle_number,
-          vehicle_type,
-          rating,
-          profiles:user_id(full_name, phone)
-        `)
+        .select('vehicle_number, vehicle_type, rating, user_id')
         .eq('id', driverId)
         .single();
 
-      if (error) throw error;
+      if (driverError) throw driverError;
 
-      if (data) {
-        setDriverInfo({
-          name: (data.profiles as any)?.full_name || 'Driver',
-          phone: (data.profiles as any)?.phone || null,
-          vehicle_number: data.vehicle_number,
-          vehicle_type: data.vehicle_type || 'Toto',
-          rating: data.rating || 5.0
-        });
-      }
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name, phone')
+        .eq('id', driver.user_id)
+        .maybeSingle();
+
+      setDriverInfo({
+        name: profile?.full_name || 'Driver',
+        phone: profile?.phone || null,
+        vehicle_number: driver.vehicle_number,
+        vehicle_type: driver.vehicle_type || 'Toto',
+        rating: driver.rating || 5.0
+      });
     } catch (error) {
       console.error('Error fetching driver info:', error);
     }
