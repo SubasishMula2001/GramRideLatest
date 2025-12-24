@@ -4,8 +4,8 @@ import { ArrowLeft, Users, Package, IndianRupee, Clock, MapPin, Navigation, Load
 import { Button } from '@/components/ui/button';
 import GramRideLogo from '@/components/GramRideLogo';
 import BookingTypeCard from '@/components/BookingTypeCard';
-import GooglePlaceInput from '@/components/GooglePlaceInput';
-import RouteMap from '@/components/RouteMap';
+import SecurePlaceInput from '@/components/SecurePlaceInput';
+import SecureRouteMap from '@/components/SecureRouteMap';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -261,7 +261,7 @@ const BookRide = () => {
               </div>
 
               <div className="space-y-4 mb-6">
-                <GooglePlaceInput
+                <SecurePlaceInput
                   type="pickup"
                   value={pickupData.address}
                   onChange={(address, lat, lng) => setPickupData({ address, lat, lng })}
@@ -276,7 +276,7 @@ const BookRide = () => {
                   </div>
                 </div>
                 
-                <GooglePlaceInput
+                <SecurePlaceInput
                   type="drop"
                   value={dropData.address}
                   onChange={(address, lat, lng) => setDropData({ address, lat, lng })}
@@ -284,9 +284,9 @@ const BookRide = () => {
                 />
               </div>
 
-              {/* Route Map */}
+              {/* Route Info */}
               <div className="mb-6">
-                <RouteMap
+                <SecureRouteMap
                   pickupLat={pickupData.lat}
                   pickupLng={pickupData.lng}
                   dropLat={dropData.lat}
