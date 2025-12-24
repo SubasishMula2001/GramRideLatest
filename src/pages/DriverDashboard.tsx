@@ -180,7 +180,7 @@ const DriverDashboard = () => {
           fare,
           distance_km,
           status,
-          profiles:user_id(full_name)
+          user_id
         `)
         .eq('driver_id', driverData.id)
         .in('status', ['accepted', 'in_progress'])
@@ -189,6 +189,20 @@ const DriverDashboard = () => {
       if (error) throw error;
 
       if (data) {
+        // Fetch user profile separately
+        let userName = 'Customer';
+        if (data.user_id) {
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('full_name')
+            .eq('id', data.user_id)
+            .maybeSingle();
+          
+          if (profileData?.full_name) {
+            userName = profileData.full_name;
+          }
+        }
+
         setActiveRide({
           id: data.id,
           ride_type: data.ride_type,
@@ -197,7 +211,7 @@ const DriverDashboard = () => {
           fare: data.fare || 0,
           distance_km: data.distance_km || 0,
           status: data.status as 'accepted' | 'in_progress',
-          user_name: (data.profiles as any)?.full_name || 'Customer'
+          user_name: userName
         });
       } else {
         setActiveRide(null);
@@ -257,12 +271,26 @@ const DriverDashboard = () => {
           dropoff_location,
           fare,
           distance_km,
-          profiles:user_id(full_name)
+          user_id
         `)
         .eq('id', rideId)
         .single();
 
       if (fetchError) throw fetchError;
+
+      // Fetch user profile separately
+      let userName = 'Customer';
+      if (rideData.user_id) {
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', rideData.user_id)
+          .maybeSingle();
+        
+        if (profileData?.full_name) {
+          userName = profileData.full_name;
+        }
+      }
 
       const { error } = await supabase
         .from('rides')
@@ -288,7 +316,7 @@ const DriverDashboard = () => {
         fare: rideData.fare || 0,
         distance_km: rideData.distance_km || 0,
         status: 'accepted',
-        user_name: (rideData.profiles as any)?.full_name || 'Customer'
+        user_name: userName
       });
 
       // Update driver stats
