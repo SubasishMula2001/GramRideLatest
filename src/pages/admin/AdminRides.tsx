@@ -62,58 +62,73 @@ const AdminRides = () => {
 
       if (error) throw error;
 
-      // Get user and driver names
-      const formattedRides = await Promise.all(
-        (data || []).map(async (ride) => {
-          let userName = 'Unknown';
-          let driverName = null;
+      // Collect unique user IDs and driver IDs for batch queries
+      const userIds = Array.from(new Set((data || []).map(r => r.user_id).filter(Boolean))) as string[];
+      const driverIds = Array.from(new Set((data || []).map(r => r.driver_id).filter(Boolean))) as string[];
 
-          if (ride.user_id) {
-            const { data: profile } = await supabase
+      // Batch fetch all profiles at once
+      const profilesMap = new Map<string, string>();
+      if (userIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, full_name')
+          .in('id', userIds);
+        
+        if (profiles) {
+          profiles.forEach(p => {
+            profilesMap.set(p.id, p.full_name || 'Unknown');
+          });
+        }
+      }
+
+      // Batch fetch all drivers at once
+      const driverUserIdMap = new Map<string, string>();
+      if (driverIds.length > 0) {
+        const { data: drivers } = await supabase
+          .from('drivers')
+          .select('id, user_id')
+          .in('id', driverIds);
+        
+        if (drivers) {
+          // Get unique driver user IDs for profile lookup
+          const driverUserIds = Array.from(new Set(drivers.map(d => d.user_id).filter(Boolean))) as string[];
+          
+          if (driverUserIds.length > 0) {
+            const { data: driverProfiles } = await supabase
               .from('profiles')
-              .select('full_name')
-              .eq('id', ride.user_id)
-              .maybeSingle();
-            userName = profile?.full_name || 'Unknown';
-          }
-
-          if (ride.driver_id) {
-            const { data: driver } = await supabase
-              .from('drivers')
-              .select('user_id')
-              .eq('id', ride.driver_id)
-              .maybeSingle();
+              .select('id, full_name')
+              .in('id', driverUserIds);
             
-            if (driver?.user_id) {
-              const { data: driverProfile } = await supabase
-                .from('profiles')
-                .select('full_name')
-                .eq('id', driver.user_id)
-                .maybeSingle();
-              driverName = driverProfile?.full_name || 'Unknown Driver';
+            if (driverProfiles) {
+              const driverProfileMap = new Map(driverProfiles.map(p => [p.id, p.full_name || 'Unknown Driver']));
+              drivers.forEach(d => {
+                const driverName = driverProfileMap.get(d.user_id) || 'Unknown Driver';
+                driverUserIdMap.set(d.id, driverName);
+              });
             }
           }
+        }
+      }
 
-          return {
-            id: ride.id,
-            pickup_location: ride.pickup_location,
-            dropoff_location: ride.dropoff_location,
-            ride_type: ride.ride_type,
-            status: ride.status || 'pending',
-            fare: ride.fare,
-            distance_km: ride.distance_km,
-            created_at: new Date(ride.created_at!).toLocaleDateString('en-IN', {
-              day: 'numeric',
-              month: 'short',
-              year: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit'
-            }),
-            user_name: userName,
-            driver_name: driverName
-          };
-        })
-      );
+      // Format rides using the pre-fetched maps (O(1) lookups)
+      const formattedRides = (data || []).map((ride) => ({
+        id: ride.id,
+        pickup_location: ride.pickup_location,
+        dropoff_location: ride.dropoff_location,
+        ride_type: ride.ride_type,
+        status: ride.status || 'pending',
+        fare: ride.fare,
+        distance_km: ride.distance_km,
+        created_at: new Date(ride.created_at!).toLocaleDateString('en-IN', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        }),
+        user_name: ride.user_id ? (profilesMap.get(ride.user_id) || 'Unknown') : 'Unknown',
+        driver_name: ride.driver_id ? (driverUserIdMap.get(ride.driver_id) || null) : null
+      }));
 
       setRides(formattedRides);
     } catch (error) {

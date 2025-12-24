@@ -17,26 +17,62 @@ const handler = async (req: Request): Promise<Response> => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Check for a simple secret to prevent abuse (but allow initial setup)
-  const url = new URL(req.url);
-  const setupKey = url.searchParams.get("key");
-  if (setupKey !== "gramride-setup-2024") {
-    return new Response(
-      JSON.stringify({ error: "Invalid setup key" }),
-      { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } }
-    );
-  }
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
   try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    // Verify admin authentication
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      console.log("Missing authorization header");
+      return new Response(
+        JSON.stringify({ error: "Unauthorized - No authorization header" }),
+        { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
 
+    // Create user client to verify the caller
+    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
+
+    const { data: { user }, error: userError } = await userClient.auth.getUser();
+    if (userError || !user) {
+      console.log("Authentication failed:", userError?.message);
+      return new Response(
+        JSON.stringify({ error: "Unauthorized - Invalid or expired token" }),
+        { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    console.log("Authenticated user:", user.id);
+
+    // Create admin client to check role
     const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
       auth: {
         autoRefreshToken: false,
         persistSession: false,
       },
     });
+
+    // Verify caller has admin role
+    const { data: roleData, error: roleError } = await adminClient
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+      .eq('role', 'admin')
+      .single();
+
+    if (roleError || !roleData) {
+      console.log("Admin role check failed:", roleError?.message);
+      return new Response(
+        JSON.stringify({ error: "Forbidden - Admin access required" }),
+        { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    console.log("Admin verified, proceeding with password reset");
 
     const results = [];
 
