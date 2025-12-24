@@ -188,6 +188,13 @@ export type Database = {
             foreignKeyName: "rides_driver_id_fkey"
             columns: ["driver_id"]
             isOneToOne: false
+            referencedRelation: "available_drivers_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rides_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
             referencedRelation: "drivers"
             referencedColumns: ["id"]
           },
@@ -213,7 +220,33 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      available_drivers_public: {
+        Row: {
+          approx_lat: number | null
+          approx_lng: number | null
+          id: string | null
+          is_available: boolean | null
+          rating: number | null
+          vehicle_type: string | null
+        }
+        Insert: {
+          approx_lat?: never
+          approx_lng?: never
+          id?: string | null
+          is_available?: boolean | null
+          rating?: number | null
+          vehicle_type?: string | null
+        }
+        Update: {
+          approx_lat?: never
+          approx_lng?: never
+          id?: string | null
+          is_available?: boolean | null
+          rating?: number | null
+          vehicle_type?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       has_role: {
