@@ -555,16 +555,6 @@ const Login = () => {
               </div>
             )}
 
-            {/* Demo Credentials */}
-            <div className="mt-6 p-4 bg-secondary/10 rounded-xl border-2 border-secondary/30">
-              <h3 className="font-bold text-base text-foreground mb-2">{t.demoMode}</h3>
-              <p className="text-sm text-muted-foreground mb-3">{t.demoWarning}</p>
-              <div className="text-sm text-muted-foreground space-y-1">
-                <p><strong>{t.user}:</strong> user@gramride.com / Demo@Pass123!</p>
-                <p><strong>{t.driver}:</strong> driver@gramride.com / Demo@Pass123!</p>
-                <p><strong>{t.admin}:</strong> admin@gramride.com / Demo@Pass123!</p>
-              </div>
-            </div>
           </div>
         </div>
       </div>
