@@ -156,32 +156,8 @@ const DriverProfile = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-hero">
-      {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border/50">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" asChild>
-              <Link to="/driver">
-                <ArrowLeft className="w-5 h-5" />
-              </Link>
-            </Button>
-            <GramRideLogo size="md" />
-          </div>
-          
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={handleLogout}
-            className="text-destructive hover:text-destructive hover:bg-destructive/10"
-          >
-            <LogOut className="w-4 h-4 mr-2" />
-            Logout
-          </Button>
-        </div>
-      </header>
-
-      <main className="pt-24 pb-12 px-4">
+    <div className="min-h-screen bg-gradient-hero pt-16">
+      <main className="pt-8 pb-12 px-4">
         <div className="container mx-auto max-w-lg">
           
           {/* Profile Header */}
