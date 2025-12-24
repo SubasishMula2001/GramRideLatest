@@ -1,13 +1,27 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
-import { Users, Package, Shield, Clock, MapPin, Smartphone, Car, TrendingUp } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Users, Package, Shield, Clock, MapPin, Smartphone, Car, TrendingUp, User, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import GramRideLogo from '@/components/GramRideLogo';
 import BookingTypeCard from '@/components/BookingTypeCard';
 import FeatureCard from '@/components/FeatureCard';
 import StatsCard from '@/components/StatsCard';
+import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
 
 const Index = () => {
+  const navigate = useNavigate();
+  const { user, signOut, userRole } = useAuth();
+
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      toast.success('Logged out successfully');
+    } catch (error) {
+      toast.error('Failed to logout');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-hero">
       {/* Header */}
@@ -19,13 +33,33 @@ const Index = () => {
             <Link to="/" className="text-foreground font-medium hover:text-primary transition-colors">Home</Link>
             <Link to="/book" className="text-muted-foreground font-medium hover:text-primary transition-colors">Book Ride</Link>
             <Link to="/driver" className="text-muted-foreground font-medium hover:text-primary transition-colors">Drive</Link>
-            <Link to="/admin" className="text-muted-foreground font-medium hover:text-primary transition-colors">Admin</Link>
+            {userRole === 'admin' && (
+              <Link to="/admin" className="text-muted-foreground font-medium hover:text-primary transition-colors">Admin</Link>
+            )}
           </nav>
 
           <div className="flex items-center gap-3">
-            <Button variant="ghost" asChild>
-              <Link to="/login">Login</Link>
-            </Button>
+            {user ? (
+              <>
+                <Button variant="ghost" size="icon" asChild>
+                  <Link to="/profile">
+                    <User className="w-5 h-5" />
+                  </Link>
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="icon"
+                  onClick={handleLogout}
+                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                >
+                  <LogOut className="w-5 h-5" />
+                </Button>
+              </>
+            ) : (
+              <Button variant="ghost" asChild>
+                <Link to="/login">Login</Link>
+              </Button>
+            )}
             <Button variant="hero" asChild>
               <Link to="/book">Book Now</Link>
             </Button>

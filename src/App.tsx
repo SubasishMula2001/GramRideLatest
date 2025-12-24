@@ -7,6 +7,8 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import Index from "./pages/Index";
 import BookRide from "./pages/BookRide";
 import DriverDashboard from "./pages/DriverDashboard";
+import DriverProfile from "./pages/DriverProfile";
+import UserProfile from "./pages/UserProfile";
 import Login from "./pages/Login";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminUsers from "./pages/admin/AdminUsers";
@@ -26,7 +28,9 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/book" element={<BookRide />} />
-            <Route path="/driver/*" element={<DriverDashboard />} />
+            <Route path="/driver" element={<DriverDashboard />} />
+            <Route path="/driver/profile" element={<DriverProfile />} />
+            <Route path="/profile" element={<UserProfile />} />
             <Route path="/login" element={<Login />} />
             <Route path="/admin" element={<AdminDashboard />} />
             <Route path="/admin/users" element={<AdminUsers />} />
