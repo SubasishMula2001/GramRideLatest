@@ -17,7 +17,8 @@ import {
   Phone,
   Package,
   Car,
-  CircleDot
+  CircleDot,
+  Locate
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -27,6 +28,7 @@ import SecureRouteMap from '@/components/SecureRouteMap';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useDriverLocationTracking } from '@/hooks/useDriverLocationTracking';
 
 interface PendingRide {
   id: string;
@@ -76,6 +78,13 @@ const DriverDashboard = () => {
   const [driverData, setDriverData] = useState<DriverData | null>(null);
   const [loading, setLoading] = useState(true);
   const [processingRide, setProcessingRide] = useState<string | null>(null);
+
+  // Track driver location during active rides
+  useDriverLocationTracking({
+    driverId: driverData?.id || null,
+    isActive: !!activeRide,
+    updateIntervalMs: 10000 // Update every 10 seconds
+  });
 
   useEffect(() => {
     if (!authLoading && !user) {
