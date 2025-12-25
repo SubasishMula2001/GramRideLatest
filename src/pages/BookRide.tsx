@@ -75,26 +75,32 @@ const BookRide = () => {
         async (payload) => {
           const updatedRide = payload.new as any;
           
-          if (updatedRide.status === 'accepted' && step === 'searching') {
-            // Fetch driver info
+          // Handle status transitions based on the new status from database
+          if (updatedRide.status === 'accepted' && updatedRide.driver_id) {
             await fetchDriverInfo(updatedRide.driver_id);
             setStep('booked');
             toast.success('Driver found! Your ride is confirmed.');
-          } else if (updatedRide.status === 'in_progress' && step === 'booked') {
+          } else if (updatedRide.status === 'in_progress') {
             setStep('in_progress');
             toast.info('Your ride has started!');
           } else if (updatedRide.status === 'completed') {
             setStep('completed');
             toast.success('Ride completed! Thank you for riding with GramRide.');
+          } else if (updatedRide.status === 'cancelled') {
+            setStep('type');
+            setRideId(null);
+            toast.error('Ride was cancelled.');
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('Ride subscription status:', status);
+      });
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [rideId, step]);
+  }, [rideId]); // Only depend on rideId, not step
 
   const fetchDriverInfo = async (driverId: string) => {
     try {
