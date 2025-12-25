@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Users, Package, IndianRupee, Clock, MapPin, Navigation, Loader2, CheckCircle, Car, Phone, User, Star } from 'lucide-react';
+import { ArrowLeft, Users, Package, IndianRupee, Clock, MapPin, Navigation, Loader2, CheckCircle, Car, Phone, User, Star, Locate } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import GramRideLogo from '@/components/GramRideLogo';
 import BookingTypeCard from '@/components/BookingTypeCard';
@@ -9,11 +9,13 @@ import SecureRouteMap from '@/components/SecureRouteMap';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useDriverLocationSubscription } from '@/hooks/useDriverLocationSubscription';
 
 type BookingType = 'passenger' | 'goods' | null;
 type BookingStep = 'type' | 'location' | 'confirm' | 'searching' | 'booked' | 'in_progress' | 'completed';
 
 interface DriverInfo {
+  id: string;
   name: string;
   phone: string | null;
   vehicle_number: string;
@@ -45,6 +47,23 @@ const BookRide = () => {
   const baseFare = bookingType === 'passenger' ? 20 : 30;
   const perKmRate = bookingType === 'passenger' ? 8 : 12;
   const estimatedFare = Math.round(baseFare + (estimatedDistance * perKmRate));
+
+  // Subscribe to driver location updates during active ride
+  const isRideActive = step === 'booked' || step === 'in_progress';
+  const { 
+    driverLocation, 
+    distanceToPickup, 
+    etaToPickup,
+    distanceToDrop,
+    etaToDrop 
+  } = useDriverLocationSubscription({
+    driverId: driverInfo?.id || null,
+    isActive: isRideActive,
+    pickupLat: pickupData.lat,
+    pickupLng: pickupData.lng,
+    dropLat: dropData.lat,
+    dropLng: dropData.lng
+  });
 
   const handleRouteCalculated = useCallback((distance: number, duration: number) => {
     setEstimatedDistance(Math.round(distance * 10) / 10);
@@ -106,7 +125,7 @@ const BookRide = () => {
     try {
       const { data: driver, error: driverError } = await supabase
         .from('drivers')
-        .select('vehicle_number, vehicle_type, rating, user_id')
+        .select('id, vehicle_number, vehicle_type, rating, user_id')
         .eq('id', driverId)
         .single();
 
@@ -119,6 +138,7 @@ const BookRide = () => {
         .maybeSingle();
 
       setDriverInfo({
+        id: driver.id,
         name: profile?.full_name || 'Driver',
         phone: profile?.phone || null,
         vehicle_number: driver.vehicle_number,
@@ -442,6 +462,26 @@ const BookRide = () => {
                 </p>
               </div>
 
+              {/* Live ETA Card */}
+              {(etaToPickup !== null || distanceToPickup !== null) && (
+                <div className="bg-gradient-primary rounded-2xl p-4 mb-4 animate-pulse-slow">
+                  <div className="flex items-center justify-between text-primary-foreground">
+                    <div className="flex items-center gap-2">
+                      <Locate className="w-5 h-5" />
+                      <span className="font-medium">Driver Location</span>
+                    </div>
+                    <div className="text-right">
+                      {etaToPickup !== null && (
+                        <p className="text-xl font-bold">{etaToPickup} min away</p>
+                      )}
+                      {distanceToPickup !== null && (
+                        <p className="text-sm opacity-80">{distanceToPickup} km to pickup</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Driver Info Card */}
               {driverInfo && (
                 <div className="bg-gradient-card rounded-2xl border-2 border-primary shadow-elevated overflow-hidden mb-6">
@@ -533,6 +573,26 @@ const BookRide = () => {
                   Enjoy your ride!
                 </p>
               </div>
+
+              {/* Live ETA to Drop Card */}
+              {(etaToDrop !== null || distanceToDrop !== null) && (
+                <div className="bg-green-600 rounded-2xl p-4 mb-4">
+                  <div className="flex items-center justify-between text-white">
+                    <div className="flex items-center gap-2">
+                      <Locate className="w-5 h-5" />
+                      <span className="font-medium">En Route</span>
+                    </div>
+                    <div className="text-right">
+                      {etaToDrop !== null && (
+                        <p className="text-xl font-bold">{etaToDrop} min to destination</p>
+                      )}
+                      {distanceToDrop !== null && (
+                        <p className="text-sm opacity-80">{distanceToDrop} km remaining</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Driver Info Card */}
               {driverInfo && (
