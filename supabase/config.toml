@@ -7,13 +7,13 @@ verify_jwt = false
 verify_jwt = true
 
 [functions.maps-geocode]
-verify_jwt = true
+verify_jwt = false
 
 [functions.maps-autocomplete]
-verify_jwt = true
+verify_jwt = false
 
 [functions.maps-place-details]
-verify_jwt = true
+verify_jwt = false
 
 [functions.maps-directions]
-verify_jwt = true
+verify_jwt = false

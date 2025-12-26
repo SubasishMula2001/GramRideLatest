@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,39 +11,12 @@ serve(async (req) => {
   }
 
   try {
-    // Verify authentication
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      console.log("Missing authorization header");
-      return new Response(
-        JSON.stringify({ error: "Unauthorized" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 401 }
-      );
-    }
-
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-    
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } }
-    });
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      console.log("Authentication failed:", authError?.message);
-      return new Response(
-        JSON.stringify({ error: "Unauthorized" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 401 }
-      );
-    }
-
     const apiKey = Deno.env.get("GOOGLE_MAPS_API_KEY");
     if (!apiKey) {
       console.error("Google Maps API key not configured");
       return new Response(
-        JSON.stringify({ error: "Maps service not configured" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
+        JSON.stringify({ error: "Maps service not configured", predictions: [] }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
       );
     }
 
@@ -60,7 +32,7 @@ serve(async (req) => {
     // Sanitize input - remove special characters that could cause issues
     const sanitizedInput = input.replace(/[<>{}]/g, '').substring(0, 200);
 
-    console.log(`Autocomplete request for user ${user.id}: "${sanitizedInput.substring(0, 30)}..."`);
+    console.log(`Autocomplete request: "${sanitizedInput.substring(0, 30)}..."`);
 
     const params = new URLSearchParams({
       input: sanitizedInput,
