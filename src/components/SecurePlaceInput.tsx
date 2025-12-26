@@ -29,34 +29,46 @@ const SecurePlaceInput: React.FC<SecurePlaceInputProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [gettingLocation, setGettingLocation] = useState(false);
   const [sessionToken] = useState(() => crypto.randomUUID());
+  const [isUserTyping, setIsUserTyping] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   
   const { geocodeCoordinates, getAutocomplete, getPlaceDetails } = useMapsProxy();
   const debouncedInput = useDebounce(inputValue, 300);
 
-  // Update input when value prop changes
+  // Update input when value prop changes (from parent)
   useEffect(() => {
-    setInputValue(value);
-  }, [value]);
+    if (!isUserTyping) {
+      setInputValue(value);
+    }
+  }, [value, isUserTyping]);
 
-  // Fetch autocomplete predictions
+  // Fetch autocomplete predictions - only when user is typing
   useEffect(() => {
-    const fetchPredictions = async () => {
+    if (!isUserTyping || debouncedInput.length < 2) {
       if (debouncedInput.length < 2) {
         setPredictions([]);
-        return;
       }
+      return;
+    }
 
+    const fetchPredictions = async () => {
       setIsLoading(true);
-      const results = await getAutocomplete(debouncedInput, sessionToken);
-      setPredictions(results);
-      setIsLoading(false);
-      setShowDropdown(results.length > 0);
+      try {
+        const results = await getAutocomplete(debouncedInput, sessionToken);
+        setPredictions(results);
+        setShowDropdown(results.length > 0);
+      } catch (error) {
+        console.error('Failed to fetch predictions:', error);
+        setPredictions([]);
+      } finally {
+        setIsLoading(false);
+      }
     };
 
     fetchPredictions();
-  }, [debouncedInput, getAutocomplete, sessionToken]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedInput, sessionToken, isUserTyping]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -78,19 +90,28 @@ const SecurePlaceInput: React.FC<SecurePlaceInputProps> = ({
   const handleSelectPrediction = useCallback(async (prediction: PlacePrediction) => {
     setIsLoading(true);
     setShowDropdown(false);
+    setIsUserTyping(false);
+    setPredictions([]);
     
-    const details = await getPlaceDetails(prediction.placeId, sessionToken);
-    
-    if (details) {
-      setInputValue(details.address);
-      onChange(details.address, details.lat, details.lng);
-    } else {
+    try {
+      const details = await getPlaceDetails(prediction.placeId, sessionToken);
+      
+      if (details) {
+        setInputValue(details.address);
+        onChange(details.address, details.lat, details.lng);
+      } else {
+        setInputValue(prediction.description);
+        onChange(prediction.description);
+      }
+    } catch (error) {
+      console.error('Failed to get place details:', error);
       setInputValue(prediction.description);
       onChange(prediction.description);
+    } finally {
+      setIsLoading(false);
     }
-    
-    setIsLoading(false);
-  }, [getPlaceDetails, onChange, sessionToken]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onChange, sessionToken]);
 
   const handleUseGPS = async () => {
     if (!navigator.geolocation) {
@@ -99,20 +120,29 @@ const SecurePlaceInput: React.FC<SecurePlaceInputProps> = ({
     }
 
     setGettingLocation(true);
+    setIsUserTyping(false);
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const { latitude, longitude } = position.coords;
         
-        const result = await geocodeCoordinates(latitude, longitude);
-        setGettingLocation(false);
-        
-        if (result) {
-          setInputValue(result.address);
-          onChange(result.address, latitude, longitude);
-        } else {
+        try {
+          const result = await geocodeCoordinates(latitude, longitude);
+          
+          if (result) {
+            setInputValue(result.address);
+            onChange(result.address, latitude, longitude);
+          } else {
+            const coordString = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+            setInputValue(coordString);
+            onChange(coordString, latitude, longitude);
+          }
+        } catch (error) {
+          console.error('Geocoding failed:', error);
           const coordString = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
           setInputValue(coordString);
           onChange(coordString, latitude, longitude);
+        } finally {
+          setGettingLocation(false);
         }
       },
       (err) => {
@@ -126,10 +156,18 @@ const SecurePlaceInput: React.FC<SecurePlaceInputProps> = ({
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
     setInputValue(newValue);
+    setIsUserTyping(true);
     if (newValue.length < 2) {
       setPredictions([]);
       setShowDropdown(false);
     }
+  };
+
+  const handleInputBlur = () => {
+    // Delay to allow click on dropdown items
+    setTimeout(() => {
+      setIsUserTyping(false);
+    }, 200);
   };
 
   return (
@@ -150,7 +188,11 @@ const SecurePlaceInput: React.FC<SecurePlaceInputProps> = ({
         type="text"
         value={inputValue}
         onChange={handleInputChange}
-        onFocus={() => predictions.length > 0 && setShowDropdown(true)}
+        onFocus={() => {
+          setIsUserTyping(true);
+          if (predictions.length > 0) setShowDropdown(true);
+        }}
+        onBlur={handleInputBlur}
         placeholder={placeholder || (type === 'pickup' ? 'Search pickup location' : 'Search drop location')}
         className={`
           w-full pl-14 pr-24 py-4 rounded-xl border-2 bg-card text-foreground
@@ -180,7 +222,7 @@ const SecurePlaceInput: React.FC<SecurePlaceInputProps> = ({
         </button>
       )}
 
-      {isLoading && !gettingLocation && (
+      {isLoading && !gettingLocation && type !== 'pickup' && (
         <div className="absolute right-4 top-1/2 -translate-y-1/2">
           <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
         </div>
