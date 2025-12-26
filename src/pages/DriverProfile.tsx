@@ -20,6 +20,7 @@ import GramRideLogo from '@/components/GramRideLogo';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import RideHistory from '@/components/RideHistory';
 
 interface DriverProfile {
   full_name: string | null;
@@ -300,6 +301,9 @@ const DriverProfile = () => {
               </div>
             </div>
           </div>
+
+          {/* Ride History */}
+          {user && <RideHistory userId={user.id} userType="driver" />}
 
         </div>
       </main>
