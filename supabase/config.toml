@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.maps-directions]
 verify_jwt = false
+
+[functions.maps-static]
+verify_jwt = false

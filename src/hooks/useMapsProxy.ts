@@ -30,6 +30,10 @@ interface DirectionsResult {
   endAddress: string;
 }
 
+interface StaticMapResult {
+  mapUrl: string;
+}
+
 export const useMapsProxy = () => {
   const geocodeCoordinates = useCallback(async (lat: number, lng: number): Promise<GeocodingResult | null> => {
     try {
@@ -108,10 +112,37 @@ export const useMapsProxy = () => {
     }
   }, []);
 
+  const getStaticMap = useCallback(async (
+    originLat: number,
+    originLng: number,
+    destLat: number,
+    destLng: number,
+    polyline?: string,
+    width: number = 400,
+    height: number = 200
+  ): Promise<string | null> => {
+    try {
+      const { data, error } = await supabase.functions.invoke('maps-static', {
+        body: { originLat, originLng, destLat, destLng, polyline, width, height }
+      });
+
+      if (error) {
+        console.error('Static map error:', error);
+        return null;
+      }
+
+      return (data as StaticMapResult)?.mapUrl || null;
+    } catch (err) {
+      console.error('Static map failed:', err);
+      return null;
+    }
+  }, []);
+
   return {
     geocodeCoordinates,
     getAutocomplete,
     getPlaceDetails,
     getDirections,
+    getStaticMap,
   };
 };
