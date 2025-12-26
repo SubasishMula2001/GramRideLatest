@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 interface GeocodingResult {
@@ -30,7 +31,7 @@ interface DirectionsResult {
 }
 
 export const useMapsProxy = () => {
-  const geocodeCoordinates = async (lat: number, lng: number): Promise<GeocodingResult | null> => {
+  const geocodeCoordinates = useCallback(async (lat: number, lng: number): Promise<GeocodingResult | null> => {
     try {
       const { data, error } = await supabase.functions.invoke('maps-geocode', {
         body: { lat, lng }
@@ -46,9 +47,9 @@ export const useMapsProxy = () => {
       console.error('Geocoding failed:', err);
       return null;
     }
-  };
+  }, []);
 
-  const getAutocomplete = async (input: string, sessionToken?: string): Promise<AutocompleteResult[]> => {
+  const getAutocomplete = useCallback(async (input: string, sessionToken?: string): Promise<AutocompleteResult[]> => {
     try {
       const { data, error } = await supabase.functions.invoke('maps-autocomplete', {
         body: { input, sessionToken }
@@ -64,9 +65,9 @@ export const useMapsProxy = () => {
       console.error('Autocomplete failed:', err);
       return [];
     }
-  };
+  }, []);
 
-  const getPlaceDetails = async (placeId: string, sessionToken?: string): Promise<PlaceDetailsResult | null> => {
+  const getPlaceDetails = useCallback(async (placeId: string, sessionToken?: string): Promise<PlaceDetailsResult | null> => {
     try {
       const { data, error } = await supabase.functions.invoke('maps-place-details', {
         body: { placeId, sessionToken }
@@ -82,9 +83,9 @@ export const useMapsProxy = () => {
       console.error('Place details failed:', err);
       return null;
     }
-  };
+  }, []);
 
-  const getDirections = async (
+  const getDirections = useCallback(async (
     originLat: number,
     originLng: number,
     destLat: number,
@@ -105,7 +106,7 @@ export const useMapsProxy = () => {
       console.error('Directions failed:', err);
       return null;
     }
-  };
+  }, []);
 
   return {
     geocodeCoordinates,
