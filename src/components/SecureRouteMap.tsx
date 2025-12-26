@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Loader2, MapPin, Navigation, ArrowRight } from 'lucide-react';
 import { useMapsProxy } from '@/hooks/useMapsProxy';
 
@@ -27,17 +27,37 @@ const SecureRouteMap: React.FC<SecureRouteMapProps> = ({
   const [error, setError] = useState<string | null>(null);
   
   const { getDirections } = useMapsProxy();
-
+  
+  // Use refs to track previous coordinates and prevent duplicate calls
+  const lastCoordsRef = useRef<string>('');
+  const onRouteCalculatedRef = useRef(onRouteCalculated);
+  const isCalculatingRef = useRef(false);
+  
+  // Update the ref when callback changes
   useEffect(() => {
-    const calculateRoute = async () => {
-      if (!pickupLat || !pickupLng || !dropLat || !dropLng) {
-        setRouteInfo(null);
-        return;
-      }
+    onRouteCalculatedRef.current = onRouteCalculated;
+  }, [onRouteCalculated]);
 
-      setIsLoading(true);
-      setError(null);
+  const calculateRoute = useCallback(async () => {
+    if (!pickupLat || !pickupLng || !dropLat || !dropLng) {
+      setRouteInfo(null);
+      return;
+    }
 
+    // Create a unique key for current coordinates
+    const coordsKey = `${pickupLat},${pickupLng},${dropLat},${dropLng}`;
+    
+    // Skip if already calculated for these coordinates or currently calculating
+    if (coordsKey === lastCoordsRef.current || isCalculatingRef.current) {
+      return;
+    }
+    
+    isCalculatingRef.current = true;
+    lastCoordsRef.current = coordsKey;
+    setIsLoading(true);
+    setError(null);
+
+    try {
       const result = await getDirections(pickupLat, pickupLng, dropLat, dropLng);
 
       if (result) {
@@ -51,16 +71,24 @@ const SecureRouteMap: React.FC<SecureRouteMapProps> = ({
         // Convert meters to km and seconds to minutes
         const distanceKm = result.distance / 1000;
         const durationMins = Math.ceil(result.duration / 60);
-        onRouteCalculated?.(distanceKm, durationMins);
+        onRouteCalculatedRef.current?.(distanceKm, durationMins);
       } else {
         setError('Could not calculate route');
+        lastCoordsRef.current = ''; // Reset so user can retry
       }
-
+    } catch (err) {
+      console.error('Route calculation error:', err);
+      setError('Could not calculate route');
+      lastCoordsRef.current = ''; // Reset so user can retry
+    } finally {
       setIsLoading(false);
-    };
+      isCalculatingRef.current = false;
+    }
+  }, [pickupLat, pickupLng, dropLat, dropLng, getDirections]);
 
+  useEffect(() => {
     calculateRoute();
-  }, [pickupLat, pickupLng, dropLat, dropLng, getDirections, onRouteCalculated]);
+  }, [calculateRoute]);
 
   if (isLoading) {
     return (
