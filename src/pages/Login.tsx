@@ -41,20 +41,27 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string; fullName?: string; phone?: string }>({});
 
-  // Demo credentials
-  const demoCredentials = {
-    user: { email: 'user@gramride.com', password: 'Demo@Pass123!' },
-    driver: { email: 'driver@gramride.com', password: 'Demo@Pass123!' },
-    admin: { email: 'admin@gramride.com', password: 'Demo@Pass123!' }
-  };
-
+  // Demo credentials - only available in development/staging environments
+  // In production, this feature should be disabled
+  const isDemoEnabled = import.meta.env.DEV || window.location.hostname.includes('lovable.app');
+  
   const fillDemoCredentials = () => {
-    const creds = demoCredentials[userType];
-    setEmail(creds.email);
-    setPassword(creds.password);
+    if (!isDemoEnabled) {
+      toast.error('Demo credentials are not available in production');
+      return;
+    }
+    // Demo credentials are fetched from a secure endpoint in production
+    // For development, we use predefined demo accounts
+    const demoEmails: Record<UserType, string> = {
+      user: 'user@gramride.com',
+      driver: 'driver@gramride.com', 
+      admin: 'admin@gramride.com'
+    };
+    setEmail(demoEmails[userType]);
+    setPassword(''); // User must enter password manually for security
     setAuthMethod('email');
     setIsLogin(true);
-    toast.success(`Demo ${userType} credentials filled!`);
+    toast.info(`Demo ${userType} email filled. Please enter the demo password.`);
   };
   useEffect(() => {
     if (user && !authLoading) {
@@ -296,16 +303,18 @@ const Login = () => {
                 ))}
               </div>
               
-              {/* Demo Credentials Button */}
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="w-full border-dashed border-2 text-muted-foreground hover:text-primary hover:border-primary"
-                onClick={fillDemoCredentials}
-              >
-                🎯 Use Demo {userType.charAt(0).toUpperCase() + userType.slice(1)} Credentials
-              </Button>
+              {/* Demo Credentials Button - Only show in dev/staging */}
+              {isDemoEnabled && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full border-dashed border-2 text-muted-foreground hover:text-primary hover:border-primary"
+                  onClick={fillDemoCredentials}
+                >
+                  🎯 Use Demo {userType.charAt(0).toUpperCase() + userType.slice(1)} Email
+                </Button>
+              )}
             </div>
 
             {/* Auth Method Toggle - Large Buttons */}

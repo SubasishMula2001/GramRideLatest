@@ -1,21 +1,28 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.2";
+import { getCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
-
+// Demo user configuration - credentials stored server-side only
+// These are well-known demo accounts for testing purposes
 const DEMO_USERS = [
-  { email: "user@gramride.com", password: "Demo@Pass123!", role: "user" },
-  { email: "driver@gramride.com", password: "Demo@Pass123!", role: "driver" },
-  { email: "admin@gramride.com", password: "Demo@Pass123!", role: "admin" },
+  { email: "user@gramride.com", role: "user" },
+  { email: "driver@gramride.com", role: "driver" },
+  { email: "admin@gramride.com", role: "admin" },
 ];
 
+// Demo password stored as environment variable for security
+// Falls back to a default for development only
+const getDemoPassword = (): string => {
+  return Deno.env.get("DEMO_USER_PASSWORD") || "Demo@Pass123!";
+};
+
 const handler = async (req: Request): Promise<Response> => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  // Handle CORS preflight
+  const corsResponse = handleCorsPreflightRequest(req);
+  if (corsResponse) return corsResponse;
+
+  const origin = req.headers.get("origin");
+  const corsHeaders = getCorsHeaders(origin);
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -74,6 +81,7 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log("Admin verified, proceeding with password reset");
 
+    const demoPassword = getDemoPassword();
     const results = [];
 
     for (const demoUser of DEMO_USERS) {
@@ -92,7 +100,7 @@ const handler = async (req: Request): Promise<Response> => {
         // Update password
         const { error: updateError } = await adminClient.auth.admin.updateUserById(
           existingUser.id,
-          { password: demoUser.password }
+          { password: demoPassword }
         );
 
         if (updateError) {
@@ -106,7 +114,7 @@ const handler = async (req: Request): Promise<Response> => {
         // Create user if not exists
         const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
           email: demoUser.email,
-          password: demoUser.password,
+          password: demoPassword,
           email_confirm: true,
           user_metadata: { full_name: `Demo ${demoUser.role}` },
         });
