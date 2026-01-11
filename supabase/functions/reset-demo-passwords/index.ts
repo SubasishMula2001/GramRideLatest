@@ -10,10 +10,10 @@ const DEMO_USERS = [
   { email: "admin@gramride.com", role: "admin" },
 ];
 
-// Demo password stored as environment variable for security
-// Falls back to a default for development only
-const getDemoPassword = (): string => {
-  return Deno.env.get("DEMO_USER_PASSWORD") || "Demo@Pass123!";
+// Demo password MUST be stored as environment variable
+// No fallback to prevent hardcoded credential exposure
+const getDemoPassword = (): string | null => {
+  return Deno.env.get("DEMO_USER_PASSWORD") || null;
 };
 
 const handler = async (req: Request): Promise<Response> => {
@@ -81,7 +81,18 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log("Admin verified, proceeding with password reset");
 
+    // Require DEMO_USER_PASSWORD environment variable - no hardcoded fallback
     const demoPassword = getDemoPassword();
+    if (!demoPassword) {
+      console.error("DEMO_USER_PASSWORD environment variable not configured");
+      return new Response(
+        JSON.stringify({ 
+          error: "Demo features not configured. Set DEMO_USER_PASSWORD environment variable to enable demo account management." 
+        }),
+        { status: 503, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
     const results = [];
 
     for (const demoUser of DEMO_USERS) {
