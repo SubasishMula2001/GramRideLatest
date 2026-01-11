@@ -1,5 +1,35 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.2";
 import { getCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.ts";
+
+// Verify user authentication
+async function verifyAuth(req: Request, corsHeaders: Record<string, string>): Promise<{ userId: string } | Response> {
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) {
+    return new Response(
+      JSON.stringify({ error: "Authentication required" }),
+      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+  const supabase = createClient(supabaseUrl, supabaseKey, {
+    global: { headers: { Authorization: authHeader } }
+  });
+
+  const token = authHeader.replace("Bearer ", "");
+  const { data, error } = await supabase.auth.getUser(token);
+  
+  if (error || !data?.user) {
+    return new Response(
+      JSON.stringify({ error: "Invalid authentication" }),
+      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  return { userId: data.user.id };
+}
 
 serve(async (req) => {
   // Handle CORS preflight
@@ -8,6 +38,12 @@ serve(async (req) => {
 
   const origin = req.headers.get("origin");
   const corsHeaders = getCorsHeaders(origin);
+
+  // Verify authentication
+  const authResult = await verifyAuth(req, corsHeaders);
+  if (authResult instanceof Response) {
+    return authResult;
+  }
 
   try {
     const apiKey = Deno.env.get("GOOGLE_MAPS_API_KEY");
@@ -32,7 +68,7 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Static map request: (${originLat}, ${originLng}) -> (${destLat}, ${destLng})`);
+    console.log(`Static map request from user ${authResult.userId}: (${originLat}, ${originLng}) -> (${destLat}, ${destLng})`);
 
     // Build the static map URL
     const params = new URLSearchParams({
