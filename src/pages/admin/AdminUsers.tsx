@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Plus, Filter, Edit, User, Loader2 } from 'lucide-react';
-import AdminSidebar from '@/components/AdminSidebar';
+import AdminLayout from '@/components/AdminLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -264,10 +264,8 @@ const AdminUsers = () => {
   const driverCount = users.filter(u => u.role === 'driver').length;
 
   return (
-    <div className="min-h-screen bg-background">
-      <AdminSidebar />
-      
-      <main className="ml-64 p-8">
+    <AdminLayout>
+      <div>
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
@@ -456,8 +454,8 @@ const AdminUsers = () => {
             <p className="text-muted-foreground">No users found</p>
           </div>
         )}
-      </main>
-    </div>
+      </div>
+    </AdminLayout>
   );
 };
 
