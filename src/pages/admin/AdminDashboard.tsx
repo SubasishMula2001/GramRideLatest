@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Users, Car, Activity, IndianRupee, Loader2 } from 'lucide-react';
-import AdminSidebar from '@/components/AdminSidebar';
+import AdminLayout from '@/components/AdminLayout';
 import AdminStatsCard from '@/components/AdminStatsCard';
 import DataTable from '@/components/DataTable';
 import { Badge } from '@/components/ui/badge';
@@ -194,10 +194,8 @@ const AdminDashboard = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <AdminSidebar />
-      
-      <main className="ml-64 p-8">
+    <AdminLayout>
+      <div>
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
@@ -260,8 +258,8 @@ const AdminDashboard = () => {
             </div>
           )}
         </div>
-      </main>
-    </div>
+      </div>
+    </AdminLayout>
   );
 };
 

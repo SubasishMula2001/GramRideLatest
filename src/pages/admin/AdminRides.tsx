@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Filter, MapPin, Navigation, Loader2, Car } from 'lucide-react';
-import AdminSidebar from '@/components/AdminSidebar';
+import AdminLayout from '@/components/AdminLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -231,10 +231,8 @@ const AdminRides = () => {
   const totalRevenue = rides.reduce((sum, r) => sum + (r.fare || 0), 0);
 
   return (
-    <div className="min-h-screen bg-background">
-      <AdminSidebar />
-      
-      <main className="ml-64 p-8">
+    <AdminLayout>
+      <div>
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
@@ -297,8 +295,8 @@ const AdminRides = () => {
             <p className="text-muted-foreground">No rides found</p>
           </div>
         )}
-      </main>
-    </div>
+      </div>
+    </AdminLayout>
   );
 };
 
