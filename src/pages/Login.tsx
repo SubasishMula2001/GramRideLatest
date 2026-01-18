@@ -50,18 +50,18 @@ const Login = () => {
       toast.error('Demo credentials are not available in production');
       return;
     }
-    // Demo credentials are fetched from a secure endpoint in production
-    // For development, we use predefined demo accounts
+    // Demo credentials for development/testing
     const demoEmails: Record<UserType, string> = {
       user: 'user@gramride.com',
       driver: 'driver@gramride.com', 
       admin: 'admin@gramride.com'
     };
+    const demoPassword = 'Demo@123';
     setEmail(demoEmails[userType]);
-    setPassword(''); // User must enter password manually for security
+    setPassword(demoPassword);
     setAuthMethod('email');
     setIsLogin(true);
-    toast.info(`Demo ${userType} email filled. Please enter the demo password.`);
+    toast.success(`Demo ${userType} credentials filled. Click login to continue.`);
   };
   useEffect(() => {
     if (user && !authLoading) {
