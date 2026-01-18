@@ -629,11 +629,33 @@ const DriverDashboard = () => {
                 </div>
 
                 {/* Actions */}
-                <div className="flex gap-3 pt-2">
+                <div className="flex flex-col gap-3 pt-2">
+                  {/* Navigate Button */}
+                  <Button 
+                    variant="outline" 
+                    className="w-full border-primary text-primary hover:bg-primary/10"
+                    onClick={() => {
+                      const lat = activeRide.status === 'accepted' ? activeRide.pickup_lat : activeRide.dropoff_lat;
+                      const lng = activeRide.status === 'accepted' ? activeRide.pickup_lng : activeRide.dropoff_lng;
+                      const label = activeRide.status === 'accepted' ? activeRide.pickup_location : activeRide.dropoff_location;
+                      
+                      if (lat && lng) {
+                        // Try Google Maps first, fallback to generic geo: URI
+                        const url = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
+                        window.open(url, '_blank');
+                      } else {
+                        toast.error('Location coordinates not available');
+                      }
+                    }}
+                  >
+                    <Locate className="w-4 h-4 mr-2" />
+                    Navigate to {activeRide.status === 'accepted' ? 'Pickup' : 'Drop-off'}
+                  </Button>
+
                   {activeRide.status === 'accepted' ? (
                     <Button 
                       variant="hero" 
-                      className="flex-1 bg-primary hover:bg-primary/90"
+                      className="w-full bg-primary hover:bg-primary/90"
                       onClick={handleStartRide}
                     >
                       <CheckCircle className="w-4 h-4 mr-2" />
@@ -642,7 +664,7 @@ const DriverDashboard = () => {
                   ) : (
                     <Button 
                       variant="hero" 
-                      className="flex-1 bg-green-600 hover:bg-green-700"
+                      className="w-full bg-green-600 hover:bg-green-700"
                       onClick={handleFinishRide}
                     >
                       <CheckCircle className="w-4 h-4 mr-2" />
