@@ -18,10 +18,12 @@ import {
   Package,
   Car,
   CircleDot,
-  Locate
+  Locate,
+  KeyRound
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
+import { Input } from '@/components/ui/input';
 import GramRideLogo from '@/components/GramRideLogo';
 import RideCard from '@/components/RideCard';
 import SecureRouteMap from '@/components/SecureRouteMap';
@@ -53,10 +55,12 @@ interface ActiveRide {
   distance_km: number;
   status: 'accepted' | 'in_progress';
   user_name: string | null;
+  user_phone: string | null;
   pickup_lat?: number;
   pickup_lng?: number;
   dropoff_lat?: number;
   dropoff_lng?: number;
+  otp?: string;
 }
 
 interface DriverData {
@@ -78,6 +82,8 @@ const DriverDashboard = () => {
   const [driverData, setDriverData] = useState<DriverData | null>(null);
   const [loading, setLoading] = useState(true);
   const [processingRide, setProcessingRide] = useState<string | null>(null);
+  const [otpInput, setOtpInput] = useState('');
+  const [otpError, setOtpError] = useState(false);
 
   // Track driver location during active rides
   useDriverLocationTracking({
@@ -207,7 +213,8 @@ const DriverDashboard = () => {
           pickup_lat,
           pickup_lng,
           dropoff_lat,
-          dropoff_lng
+          dropoff_lng,
+          otp
         `)
         .eq('driver_id', driverData.id)
         .in('status', ['accepted', 'in_progress'])
@@ -218,15 +225,19 @@ const DriverDashboard = () => {
       if (data) {
         // Fetch user profile separately
         let userName = 'Customer';
+        let userPhone: string | null = null;
         if (data.user_id) {
           const { data: profileData } = await supabase
             .from('profiles')
-            .select('full_name')
+            .select('full_name, phone')
             .eq('id', data.user_id)
             .maybeSingle();
           
           if (profileData?.full_name) {
             userName = profileData.full_name;
+          }
+          if (profileData?.phone) {
+            userPhone = profileData.phone;
           }
         }
 
@@ -239,10 +250,12 @@ const DriverDashboard = () => {
           distance_km: data.distance_km || 0,
           status: data.status as 'accepted' | 'in_progress',
           user_name: userName,
+          user_phone: userPhone,
           pickup_lat: data.pickup_lat,
           pickup_lng: data.pickup_lng,
           dropoff_lat: data.dropoff_lat,
-          dropoff_lng: data.dropoff_lng
+          dropoff_lng: data.dropoff_lng,
+          otp: data.otp || undefined
         });
       } else {
         setActiveRide(null);
@@ -306,7 +319,8 @@ const DriverDashboard = () => {
           pickup_lat,
           pickup_lng,
           dropoff_lat,
-          dropoff_lng
+          dropoff_lng,
+          otp
         `)
         .eq('id', rideId)
         .single();
@@ -315,15 +329,19 @@ const DriverDashboard = () => {
 
       // Fetch user profile separately
       let userName = 'Customer';
+      let userPhone: string | null = null;
       if (rideData.user_id) {
         const { data: profileData } = await supabase
           .from('profiles')
-          .select('full_name')
+          .select('full_name, phone')
           .eq('id', rideData.user_id)
           .maybeSingle();
         
         if (profileData?.full_name) {
           userName = profileData.full_name;
+        }
+        if (profileData?.phone) {
+          userPhone = profileData.phone;
         }
       }
 
@@ -354,10 +372,12 @@ const DriverDashboard = () => {
         distance_km: rideData.distance_km || 0,
         status: 'accepted',
         user_name: userName,
+        user_phone: userPhone,
         pickup_lat: rideData.pickup_lat,
         pickup_lng: rideData.pickup_lng,
         dropoff_lat: rideData.dropoff_lat,
-        dropoff_lng: rideData.dropoff_lng
+        dropoff_lng: rideData.dropoff_lng,
+        otp: rideData.otp || undefined
       });
 
       // Update driver stats
@@ -384,6 +404,13 @@ const DriverDashboard = () => {
   const handleStartRide = async () => {
     if (!activeRide || !driverData) return;
 
+    // Validate OTP
+    if (activeRide.otp && otpInput !== activeRide.otp) {
+      setOtpError(true);
+      toast.error('Invalid OTP. Please check with the customer.');
+      return;
+    }
+
     try {
       const { error } = await supabase
         .from('rides')
@@ -393,6 +420,8 @@ const DriverDashboard = () => {
       if (error) throw error;
 
       setActiveRide(prev => prev ? { ...prev, status: 'in_progress' } : null);
+      setOtpInput('');
+      setOtpError(false);
       toast.success('Ride started!');
 
       await supabase.from('activity_logs').insert({
@@ -653,14 +682,48 @@ const DriverDashboard = () => {
                   </Button>
 
                   {activeRide.status === 'accepted' ? (
-                    <Button 
-                      variant="hero" 
-                      className="w-full bg-primary hover:bg-primary/90"
-                      onClick={handleStartRide}
-                    >
-                      <CheckCircle className="w-4 h-4 mr-2" />
-                      Picked Up Customer
-                    </Button>
+                    <div className="space-y-3">
+                      {/* OTP Input */}
+                      {activeRide.otp && (
+                        <div className="bg-secondary/10 rounded-xl p-4 border border-secondary/30">
+                          <div className="flex items-center gap-2 mb-3">
+                            <KeyRound className="w-5 h-5 text-secondary" />
+                            <span className="font-semibold text-foreground">Enter Customer OTP</span>
+                          </div>
+                          <p className="text-sm text-muted-foreground mb-3">
+                            Ask the customer for their 4-digit OTP to verify pickup
+                          </p>
+                          <Input
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            maxLength={4}
+                            placeholder="Enter 4-digit OTP"
+                            value={otpInput}
+                            onChange={(e) => {
+                              const value = e.target.value.replace(/\D/g, '');
+                              setOtpInput(value);
+                              setOtpError(false);
+                            }}
+                            className={`text-center text-xl font-bold tracking-widest ${
+                              otpError ? 'border-destructive focus-visible:ring-destructive' : ''
+                            }`}
+                          />
+                          {otpError && (
+                            <p className="text-destructive text-sm mt-2">Invalid OTP. Please try again.</p>
+                          )}
+                        </div>
+                      )}
+                      <Button 
+                        variant="hero" 
+                        className="w-full bg-primary hover:bg-primary/90"
+                        onClick={handleStartRide}
+                        disabled={activeRide.otp ? otpInput.length !== 4 : false}
+                      >
+                        <CheckCircle className="w-4 h-4 mr-2" />
+                        Picked Up Customer
+                      </Button>
+                    </div>
                   ) : (
                     <Button 
                       variant="hero" 

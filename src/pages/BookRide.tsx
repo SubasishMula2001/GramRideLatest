@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Users, Package, IndianRupee, Clock, MapPin, Navigation, Loader2, CheckCircle, Car, Phone, User, Star, Locate } from 'lucide-react';
+import { ArrowLeft, Users, Package, IndianRupee, Clock, MapPin, Navigation, Loader2, CheckCircle, Car, Phone, User, Star, Locate, KeyRound } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import GramRideLogo from '@/components/GramRideLogo';
 import BookingTypeCard from '@/components/BookingTypeCard';
@@ -40,6 +40,7 @@ const BookRide = () => {
   const [loading, setLoading] = useState(false);
   const [rideId, setRideId] = useState<string | null>(null);
   const [driverInfo, setDriverInfo] = useState<DriverInfo | null>(null);
+  const [rideOtp, setRideOtp] = useState<string | null>(null);
   
   // Route calculated values
   const [estimatedDistance, setEstimatedDistance] = useState(3.5);
@@ -170,6 +171,9 @@ const BookRide = () => {
 
     setLoading(true);
     try {
+      // Generate 4-digit OTP for pickup verification
+      const otp = Math.floor(1000 + Math.random() * 9000).toString();
+      
       const { data, error } = await supabase
         .from('rides')
         .insert({
@@ -184,7 +188,8 @@ const BookRide = () => {
           fare: estimatedFare,
           distance_km: estimatedDistance,
           duration_mins: estimatedTime,
-          status: 'pending'
+          status: 'pending',
+          otp: otp
         })
         .select()
         .single();
@@ -192,6 +197,7 @@ const BookRide = () => {
       if (error) throw error;
 
       setRideId(data.id);
+      setRideOtp(otp);
       setStep('searching');
       toast.success('Booking created! Finding a driver...');
 
@@ -553,6 +559,32 @@ const BookRide = () => {
                         {estimatedFare}
                       </span>
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {/* OTP Display Card */}
+              {rideOtp && (
+                <div className="bg-gradient-card rounded-2xl border-2 border-secondary shadow-elevated overflow-hidden mb-6 animate-scale-in">
+                  <div className="bg-gradient-secondary px-5 py-3 flex items-center gap-2">
+                    <KeyRound className="w-5 h-5 text-secondary-foreground" />
+                    <p className="text-secondary-foreground font-semibold">Pickup OTP</p>
+                  </div>
+                  <div className="p-6 text-center">
+                    <p className="text-muted-foreground text-sm mb-2">Share this code with your driver at pickup</p>
+                    <div className="flex items-center justify-center gap-3">
+                      {rideOtp.split('').map((digit, index) => (
+                        <div 
+                          key={index}
+                          className="w-14 h-16 rounded-xl bg-primary/10 border-2 border-primary flex items-center justify-center"
+                        >
+                          <span className="text-3xl font-bold text-primary">{digit}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-muted-foreground text-xs mt-4">
+                      This ensures you're getting into the right vehicle
+                    </p>
                   </div>
                 </div>
               )}
