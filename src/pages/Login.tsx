@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { toast } from 'sonner';
 import { z } from 'zod';
+import { supabase } from '@/integrations/supabase/client';
 
 type UserType = 'user' | 'driver' | 'admin';
 type AuthMethod = 'email' | 'phone';
@@ -45,23 +46,45 @@ const Login = () => {
   // In production, this feature should be disabled
   const isDemoEnabled = import.meta.env.DEV || window.location.hostname.includes('lovable.app');
   
-  const fillDemoCredentials = () => {
+  const fillDemoCredentials = async () => {
     if (!isDemoEnabled) {
       toast.error('Demo credentials are not available in production');
       return;
     }
-    // Demo credentials for development/testing
-    const demoEmails: Record<UserType, string> = {
-      user: 'user@gramride.com',
-      driver: 'driver@gramride.com', 
-      admin: 'admin@gramride.com'
-    };
-    const demoPassword = 'Demo@123';
-    setEmail(demoEmails[userType]);
-    setPassword(demoPassword);
-    setAuthMethod('email');
-    setIsLogin(true);
-    toast.success(`Demo ${userType} credentials filled. Click login to continue.`);
+    
+    setLoading(true);
+    toast.info('Setting up demo accounts...');
+    
+    try {
+      // Call the setup endpoint to ensure demo users exist with correct passwords
+      const { data, error } = await supabase.functions.invoke('setup-demo-users');
+      
+      if (error) {
+        console.error('Setup error:', error);
+        toast.error('Failed to setup demo accounts');
+        setLoading(false);
+        return;
+      }
+      
+      const demoEmails: Record<UserType, string> = {
+        user: 'user@gramride.com',
+        driver: 'driver@gramride.com', 
+        admin: 'admin@gramride.com'
+      };
+      
+      // Use the password returned from the server
+      const demoPassword = data.password || 'Demo@123';
+      setEmail(demoEmails[userType]);
+      setPassword(demoPassword);
+      setAuthMethod('email');
+      setIsLogin(true);
+      toast.success(`Demo ${userType} credentials ready. Click login to continue.`);
+    } catch (err) {
+      console.error('Demo setup failed:', err);
+      toast.error('Failed to setup demo credentials');
+    } finally {
+      setLoading(false);
+    }
   };
   useEffect(() => {
     if (user && !authLoading) {
