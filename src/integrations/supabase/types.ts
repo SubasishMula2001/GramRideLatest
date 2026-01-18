@@ -138,6 +138,7 @@ export type Database = {
           duration_mins: number | null
           fare: number | null
           id: string
+          otp: string | null
           pickup_lat: number | null
           pickup_lng: number | null
           pickup_location: string
@@ -157,6 +158,7 @@ export type Database = {
           duration_mins?: number | null
           fare?: number | null
           id?: string
+          otp?: string | null
           pickup_lat?: number | null
           pickup_lng?: number | null
           pickup_location: string
@@ -176,6 +178,7 @@ export type Database = {
           duration_mins?: number | null
           fare?: number | null
           id?: string
+          otp?: string | null
           pickup_lat?: number | null
           pickup_lng?: number | null
           pickup_location?: string
