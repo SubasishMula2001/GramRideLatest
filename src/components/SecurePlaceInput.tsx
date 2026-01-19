@@ -232,27 +232,46 @@ const SecurePlaceInput: React.FC<SecurePlaceInputProps> = ({
       {showDropdown && predictions.length > 0 && (
         <div 
           ref={dropdownRef}
-          className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-lg z-50 max-h-60 overflow-auto"
+          className="absolute top-full left-0 right-0 mt-2 bg-card border border-border rounded-xl shadow-elevated z-[100] max-h-64 overflow-auto animate-fade-in"
         >
-          {predictions.map((prediction) => (
+          {predictions.map((prediction, index) => (
             <button
               key={prediction.placeId}
               onClick={() => handleSelectPrediction(prediction)}
-              className="w-full px-4 py-3 text-left hover:bg-muted transition-colors flex items-start gap-3 border-b border-border last:border-b-0"
+              onMouseDown={(e) => e.preventDefault()}
+              className={`
+                w-full px-4 py-3 text-left hover:bg-primary/5 transition-colors 
+                flex items-start gap-3 border-b border-border/50 last:border-b-0
+                ${index === 0 ? 'rounded-t-xl' : ''}
+                ${index === predictions.length - 1 ? 'rounded-b-xl' : ''}
+              `}
             >
-              <Search className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+              <div className={`
+                mt-0.5 p-1.5 rounded-full flex-shrink-0
+                ${type === 'pickup' ? 'bg-primary/10' : 'bg-secondary/10'}
+              `}>
+                <MapPin className={`w-3 h-3 ${type === 'pickup' ? 'text-primary' : 'text-secondary'}`} />
+              </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-foreground truncate">
                   {prediction.mainText || prediction.description}
                 </p>
                 {prediction.secondaryText && (
-                  <p className="text-xs text-muted-foreground truncate">
+                  <p className="text-xs text-muted-foreground truncate mt-0.5">
                     {prediction.secondaryText}
                   </p>
                 )}
               </div>
             </button>
           ))}
+        </div>
+      )}
+
+      {/* Loading state for autocomplete */}
+      {isLoading && isUserTyping && inputValue.length >= 2 && (
+        <div className="absolute top-full left-0 right-0 mt-2 bg-card border border-border rounded-xl shadow-elevated z-[100] p-4 flex items-center justify-center gap-2">
+          <Loader2 className="w-4 h-4 animate-spin text-primary" />
+          <span className="text-sm text-muted-foreground">Finding locations...</span>
         </div>
       )}
     </div>
