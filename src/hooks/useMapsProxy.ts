@@ -55,6 +55,13 @@ export const useMapsProxy = () => {
 
   const getAutocomplete = useCallback(async (input: string, sessionToken?: string): Promise<AutocompleteResult[]> => {
     try {
+      // Check if user is authenticated first
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        console.warn('Autocomplete requires authentication - user not logged in');
+        return [];
+      }
+
       const { data, error } = await supabase.functions.invoke('maps-autocomplete', {
         body: { input, sessionToken }
       });

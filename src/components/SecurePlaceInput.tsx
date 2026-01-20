@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { MapPin, Navigation, Loader2, Search } from 'lucide-react';
+import { MapPin, Navigation, Loader2 } from 'lucide-react';
 import { useMapsProxy } from '@/hooks/useMapsProxy';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface PlacePrediction {
   placeId: string;
@@ -23,6 +24,7 @@ const SecurePlaceInput: React.FC<SecurePlaceInputProps> = ({
   onChange,
   placeholder,
 }) => {
+  const { user } = useAuth();
   const [inputValue, setInputValue] = useState(value);
   const [predictions, setPredictions] = useState<PlacePrediction[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -30,6 +32,7 @@ const SecurePlaceInput: React.FC<SecurePlaceInputProps> = ({
   const [gettingLocation, setGettingLocation] = useState(false);
   const [sessionToken] = useState(() => crypto.randomUUID());
   const [isUserTyping, setIsUserTyping] = useState(false);
+  const [authError, setAuthError] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   
@@ -43,14 +46,25 @@ const SecurePlaceInput: React.FC<SecurePlaceInputProps> = ({
     }
   }, [value, isUserTyping]);
 
-  // Fetch autocomplete predictions - only when user is typing
+  // Fetch autocomplete predictions - only when user is typing and authenticated
   useEffect(() => {
     if (!isUserTyping || debouncedInput.length < 2) {
       if (debouncedInput.length < 2) {
         setPredictions([]);
+        setAuthError(false);
       }
       return;
     }
+
+    // Check if user is authenticated
+    if (!user) {
+      setAuthError(true);
+      setPredictions([]);
+      setShowDropdown(true);
+      return;
+    }
+
+    setAuthError(false);
 
     const fetchPredictions = async () => {
       setIsLoading(true);
@@ -68,7 +82,7 @@ const SecurePlaceInput: React.FC<SecurePlaceInputProps> = ({
 
     fetchPredictions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedInput, sessionToken, isUserTyping]);
+  }, [debouncedInput, sessionToken, isUserTyping, user]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -228,8 +242,20 @@ const SecurePlaceInput: React.FC<SecurePlaceInputProps> = ({
         </div>
       )}
 
+      {/* Auth Error Message */}
+      {showDropdown && authError && inputValue.length >= 2 && (
+        <div 
+          ref={dropdownRef}
+          className="absolute top-full left-0 right-0 mt-2 bg-card border border-destructive/30 rounded-xl shadow-elevated z-[100] p-4 animate-fade-in"
+        >
+          <p className="text-sm text-destructive text-center">
+            Please login to search locations
+          </p>
+        </div>
+      )}
+
       {/* Autocomplete Dropdown */}
-      {showDropdown && predictions.length > 0 && (
+      {showDropdown && predictions.length > 0 && !authError && (
         <div 
           ref={dropdownRef}
           className="absolute top-full left-0 right-0 mt-2 bg-card border border-border rounded-xl shadow-elevated z-[100] max-h-64 overflow-auto animate-fade-in"
@@ -268,7 +294,7 @@ const SecurePlaceInput: React.FC<SecurePlaceInputProps> = ({
       )}
 
       {/* Loading state for autocomplete */}
-      {isLoading && isUserTyping && inputValue.length >= 2 && (
+      {isLoading && isUserTyping && inputValue.length >= 2 && !authError && (
         <div className="absolute top-full left-0 right-0 mt-2 bg-card border border-border rounded-xl shadow-elevated z-[100] p-4 flex items-center justify-center gap-2">
           <Loader2 className="w-4 h-4 animate-spin text-primary" />
           <span className="text-sm text-muted-foreground">Finding locations...</span>
