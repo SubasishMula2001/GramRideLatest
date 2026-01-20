@@ -42,9 +42,10 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string; fullName?: string; phone?: string }>({});
 
-  // Demo credentials - only available in development/staging environments
-  // In production, this feature should be disabled
-  const isDemoEnabled = import.meta.env.DEV || window.location.hostname.includes('lovable.app');
+  // Demo credentials - only available in development + preview environments.
+  // Keep this disabled on published URLs.
+  const hostname = window.location.hostname;
+  const isDemoEnabled = import.meta.env.DEV || hostname.includes('-preview--') || hostname.includes('localhost');
   
   const fillDemoCredentials = async () => {
     if (!isDemoEnabled) {
