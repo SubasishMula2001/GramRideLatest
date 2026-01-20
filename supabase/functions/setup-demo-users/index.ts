@@ -29,9 +29,15 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
+    const originStr = origin ?? "";
+    const isPreviewOrigin =
+      originStr.includes("-preview--") ||
+      originStr.includes("localhost") ||
+      originStr.includes("127.0.0.1");
+
     // SECURITY: Check authorization
-    // For demo setup, allow: 1) valid admin JWT, or 2) unauthenticated bootstrap (checks if admin exists)
-    
+    // - Preview/dev: allow unauthenticated to support the login-page demo button.
+    // - Published: require a valid admin JWT.
     const authHeader = req.headers.get("Authorization");
     let isAuthorized = false;
     let adminEmail = "bootstrap";
@@ -41,8 +47,15 @@ const handler = async (req: Request): Promise<Response> => {
       auth: { autoRefreshToken: false, persistSession: false },
     });
     
-    // Try JWT auth first (for logged-in admins)
-    if (authHeader?.startsWith("Bearer ")) {
+    // Preview/dev shortcut
+    if (isPreviewOrigin) {
+      isAuthorized = true;
+      adminEmail = "preview-demo";
+      console.log(`Preview origin detected (${originStr}) - allowing demo setup without JWT`);
+    }
+
+    // Try JWT auth first (for published / non-preview)
+    if (!isAuthorized && authHeader?.startsWith("Bearer ")) {
       const userClient = createClient(supabaseUrl, supabaseAnonKey, {
         global: { headers: { Authorization: authHeader } }
       });
@@ -69,7 +82,7 @@ const handler = async (req: Request): Promise<Response> => {
       }
     }
     
-    // Fallback: Allow bootstrap only if no admin users exist yet
+    // Fallback: Allow bootstrap only if no admin users exist yet (non-preview)
     if (!isAuthorized) {
       // Check if any admin exists in the system
       const { data: existingAdmins, error: adminCheckError } = await adminClient
@@ -166,12 +179,12 @@ const handler = async (req: Request): Promise<Response> => {
       }
     }
 
-    // SECURITY: Do NOT return the password in the response
+    // SECURITY: Only return the password in preview/dev contexts.
     return new Response(
       JSON.stringify({ 
         success: true, 
-        results
-        // password is intentionally NOT returned for security
+        results,
+        ...(isPreviewOrigin ? { password: demoPassword } : {})
       }),
       { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
