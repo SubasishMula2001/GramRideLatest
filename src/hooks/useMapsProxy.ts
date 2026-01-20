@@ -57,8 +57,8 @@ export const useMapsProxy = () => {
     try {
       // Check if user is authenticated first
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        console.warn('Autocomplete requires authentication - user not logged in');
+      if (!session?.access_token) {
+        // Silent return - don't log warning for expected unauthenticated state
         return [];
       }
 
@@ -67,13 +67,20 @@ export const useMapsProxy = () => {
       });
 
       if (error) {
-        console.error('Autocomplete error:', error);
+        // Only log non-auth errors (401/403 are expected for expired sessions)
+        if (!error.message?.includes('401') && !error.message?.includes('non-2xx')) {
+          console.error('Autocomplete error:', error);
+        }
         return [];
       }
 
       return data?.predictions || [];
     } catch (err) {
-      console.error('Autocomplete failed:', err);
+      // Suppress auth-related errors
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      if (!errorMsg.includes('401') && !errorMsg.includes('non-2xx')) {
+        console.error('Autocomplete failed:', err);
+      }
       return [];
     }
   }, []);
