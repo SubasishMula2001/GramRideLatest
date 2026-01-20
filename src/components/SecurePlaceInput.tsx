@@ -24,7 +24,7 @@ const SecurePlaceInput: React.FC<SecurePlaceInputProps> = ({
   onChange,
   placeholder,
 }) => {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [inputValue, setInputValue] = useState(value);
   const [predictions, setPredictions] = useState<PlacePrediction[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -48,6 +48,11 @@ const SecurePlaceInput: React.FC<SecurePlaceInputProps> = ({
 
   // Fetch autocomplete predictions - only when user is typing and authenticated
   useEffect(() => {
+    // Don't make API calls while auth is loading
+    if (authLoading) {
+      return;
+    }
+
     if (!isUserTyping || debouncedInput.length < 2) {
       if (debouncedInput.length < 2) {
         setPredictions([]);
@@ -82,7 +87,7 @@ const SecurePlaceInput: React.FC<SecurePlaceInputProps> = ({
 
     fetchPredictions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedInput, sessionToken, isUserTyping, user]);
+  }, [debouncedInput, sessionToken, isUserTyping, user, authLoading]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
