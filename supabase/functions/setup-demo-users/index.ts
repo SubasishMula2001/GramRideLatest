@@ -36,6 +36,7 @@ const handler = async (req: Request): Promise<Response> => {
     const isPreviewOrigin =
       originStr.includes("-preview--") ||
       originStr.includes("lovable.app") ||
+      originStr.includes("lovableproject.com") ||
       originStr.includes("localhost") ||
       originStr.includes("127.0.0.1");
 

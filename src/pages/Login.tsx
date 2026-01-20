@@ -45,7 +45,12 @@ const Login = () => {
   // Demo credentials - only available in development + preview environments.
   // Keep this disabled on published URLs.
   const hostname = window.location.hostname;
-  const isDemoEnabled = import.meta.env.DEV || hostname.includes('-preview--') || hostname.includes('localhost');
+  const isDemoEnabled =
+    import.meta.env.DEV ||
+    hostname.includes('-preview--') ||
+    hostname.includes('lovableproject.com') ||
+    hostname.includes('localhost') ||
+    hostname.includes('127.0.0.1');
   
   const fillDemoCredentials = async () => {
     if (!isDemoEnabled) {
