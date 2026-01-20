@@ -30,14 +30,18 @@ const handler = async (req: Request): Promise<Response> => {
     }
 
     const originStr = origin ?? "";
+    console.log(`Request origin: "${originStr}"`);
+    
+    // Allow demo setup from preview/dev environments
     const isPreviewOrigin =
       originStr.includes("-preview--") ||
+      originStr.includes("lovable.app") ||
       originStr.includes("localhost") ||
       originStr.includes("127.0.0.1");
 
     // SECURITY: Check authorization
     // - Preview/dev: allow unauthenticated to support the login-page demo button.
-    // - Published: require a valid admin JWT.
+    // - Published custom domains: require a valid admin JWT.
     const authHeader = req.headers.get("Authorization");
     let isAuthorized = false;
     let adminEmail = "bootstrap";
@@ -47,11 +51,11 @@ const handler = async (req: Request): Promise<Response> => {
       auth: { autoRefreshToken: false, persistSession: false },
     });
     
-    // Preview/dev shortcut
+    // Preview/dev shortcut - allow demo setup without auth
     if (isPreviewOrigin) {
       isAuthorized = true;
       adminEmail = "preview-demo";
-      console.log(`Preview origin detected (${originStr}) - allowing demo setup without JWT`);
+      console.log(`Preview/dev origin detected - allowing demo setup without JWT`);
     }
 
     // Try JWT auth first (for published / non-preview)
