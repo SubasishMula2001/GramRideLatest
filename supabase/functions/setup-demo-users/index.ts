@@ -17,6 +17,7 @@ const handler = async (req: Request): Promise<Response> => {
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const demoPassword = Deno.env.get("DEMO_USER_PASSWORD");
 
@@ -28,9 +29,52 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
+    // SECURITY: Verify admin authentication
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      console.error("No authorization header provided");
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    // Verify the user's JWT token
+    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
+
+    const { data: { user }, error: userError } = await userClient.auth.getUser();
+    if (userError || !user) {
+      console.error("Invalid authentication:", userError?.message);
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    // Create admin client for privileged operations
     const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
+
+    // Verify admin role
+    const { data: roleData, error: roleError } = await adminClient
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+      .eq('role', 'admin')
+      .single();
+
+    if (roleError || !roleData) {
+      console.error("Admin role required:", roleError?.message);
+      return new Response(
+        JSON.stringify({ error: "Forbidden - Admin access required" }),
+        { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    console.log(`Admin ${user.email} is setting up demo users`);
 
     const results = [];
 
@@ -100,12 +144,12 @@ const handler = async (req: Request): Promise<Response> => {
       }
     }
 
-    // Return the password so the frontend knows what to use
+    // SECURITY: Do NOT return the password in the response
     return new Response(
       JSON.stringify({ 
         success: true, 
-        results,
-        password: demoPassword 
+        results
+        // password is intentionally NOT returned for security
       }),
       { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
