@@ -29,52 +29,74 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-    // SECURITY: Verify admin authentication
+    // SECURITY: Check authorization
+    // For demo setup, allow: 1) valid admin JWT, or 2) unauthenticated bootstrap (checks if admin exists)
+    
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      console.error("No authorization header provided");
-      return new Response(
-        JSON.stringify({ error: "Unauthorized" }),
-        { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
-      );
-    }
-
-    // Verify the user's JWT token
-    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } }
-    });
-
-    const { data: { user }, error: userError } = await userClient.auth.getUser();
-    if (userError || !user) {
-      console.error("Invalid authentication:", userError?.message);
-      return new Response(
-        JSON.stringify({ error: "Unauthorized" }),
-        { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
-      );
-    }
-
+    let isAuthorized = false;
+    let adminEmail = "bootstrap";
+    
     // Create admin client for privileged operations
     const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
+    
+    // Try JWT auth first (for logged-in admins)
+    if (authHeader?.startsWith("Bearer ")) {
+      const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+        global: { headers: { Authorization: authHeader } }
+      });
 
-    // Verify admin role
-    const { data: roleData, error: roleError } = await adminClient
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('role', 'admin')
-      .single();
+      const token = authHeader.replace("Bearer ", "");
+      const { data: claimsData, error: claimsError } = await userClient.auth.getClaims(token);
+      
+      if (!claimsError && claimsData?.claims?.sub) {
+        const userId = claimsData.claims.sub as string;
+        adminEmail = claimsData.claims.email as string || "admin";
 
-    if (roleError || !roleData) {
-      console.error("Admin role required:", roleError?.message);
+        // Check admin role
+        const { data: roleData } = await adminClient
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', userId)
+          .eq('role', 'admin')
+          .maybeSingle();
+
+        if (roleData) {
+          isAuthorized = true;
+          console.log(`Admin ${adminEmail} authorized via JWT`);
+        }
+      }
+    }
+    
+    // Fallback: Allow bootstrap only if no admin users exist yet
+    if (!isAuthorized) {
+      // Check if any admin exists in the system
+      const { data: existingAdmins, error: adminCheckError } = await adminClient
+        .from('user_roles')
+        .select('id')
+        .eq('role', 'admin')
+        .limit(1);
+      
+      if (!adminCheckError && (!existingAdmins || existingAdmins.length === 0)) {
+        // No admins exist - allow bootstrap setup
+        isAuthorized = true;
+        adminEmail = "initial-bootstrap";
+        console.log("Bootstrap setup authorized - no admins exist yet");
+      } else if (existingAdmins && existingAdmins.length > 0) {
+        console.log("Admins exist - JWT authentication required");
+      }
+    }
+    
+    if (!isAuthorized) {
+      console.error("Authorization failed: no valid admin JWT and system already has admins");
       return new Response(
-        JSON.stringify({ error: "Forbidden - Admin access required" }),
-        { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        JSON.stringify({ error: "Unauthorized - Admin login required" }),
+        { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
 
-    console.log(`Admin ${user.email} is setting up demo users`);
+    console.log(`${adminEmail} is setting up demo users`);
 
     const results = [];
 
