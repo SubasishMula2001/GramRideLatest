@@ -11,6 +11,7 @@ import Index from "./pages/Index";
 import BookRide from "./pages/BookRide";
 import DriverDashboard from "./pages/DriverDashboard";
 import DriverProfile from "./pages/DriverProfile";
+import DriverAnalytics from "./pages/driver/DriverAnalytics";
 import UserProfile from "./pages/UserProfile";
 import Login from "./pages/Login";
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -18,6 +19,7 @@ import AdminUsers from "./pages/admin/AdminUsers";
 import AdminDrivers from "./pages/admin/AdminDrivers";
 import AdminRides from "./pages/admin/AdminRides";
 import AdminLogs from "./pages/admin/AdminLogs";
+import AdminReports from "./pages/admin/AdminReports";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -58,6 +60,11 @@ const App = () => (
                 <DriverProfile />
               </ProtectedRoute>
             } />
+            <Route path="/driver/analytics" element={
+              <ProtectedRoute allowedRoles={['driver']}>
+                <DriverAnalytics />
+              </ProtectedRoute>
+            } />
             
             {/* Admin Routes */}
             <Route path="/admin" element={
@@ -83,6 +90,11 @@ const App = () => (
             <Route path="/admin/logs" element={
               <ProtectedRoute allowedRoles={['admin']}>
                 <AdminLogs />
+              </ProtectedRoute>
+            } />
+            <Route path="/admin/reports" element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <AdminReports />
               </ProtectedRoute>
             } />
             
