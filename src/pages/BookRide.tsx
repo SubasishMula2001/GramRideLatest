@@ -1,15 +1,18 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Users, Package, IndianRupee, Clock, MapPin, Navigation, Loader2, CheckCircle, Car, Phone, User, Star, Locate, KeyRound } from 'lucide-react';
+import { ArrowLeft, Users, Package, IndianRupee, Clock, MapPin, Navigation, Loader2, CheckCircle, Car, Phone, User, Star, Locate, KeyRound, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import GramRideLogo from '@/components/GramRideLogo';
 import BookingTypeCard from '@/components/BookingTypeCard';
 import SecurePlaceInput from '@/components/SecurePlaceInput';
 import SecureRouteMap from '@/components/SecureRouteMap';
+import RatingModal from '@/components/RatingModal';
+import ScheduleRideModal from '@/components/ScheduleRideModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useDriverLocationSubscription } from '@/hooks/useDriverLocationSubscription';
+import { format } from 'date-fns';
 
 type BookingType = 'passenger' | 'goods' | null;
 type BookingStep = 'type' | 'location' | 'confirm' | 'searching' | 'booked' | 'in_progress' | 'completed';
@@ -29,6 +32,10 @@ interface LocationData {
   lng?: number;
 }
 
+interface UserProfile {
+  full_name: string | null;
+}
+
 const BookRide = () => {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
@@ -41,6 +48,10 @@ const BookRide = () => {
   const [rideId, setRideId] = useState<string | null>(null);
   const [driverInfo, setDriverInfo] = useState<DriverInfo | null>(null);
   const [rideOtp, setRideOtp] = useState<string | null>(null);
+  const [showRatingModal, setShowRatingModal] = useState(false);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [scheduledFor, setScheduledFor] = useState<Date | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   
   // Route calculated values
   const [estimatedDistance, setEstimatedDistance] = useState(3.5);
@@ -75,6 +86,16 @@ const BookRide = () => {
     if (!authLoading && !user) {
       toast.error('Please login to book a ride');
       navigate('/login');
+    } else if (user) {
+      // Fetch user profile for displaying name
+      supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', user.id)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data) setUserProfile(data);
+        });
     }
   }, [user, authLoading, navigate]);
 
@@ -106,6 +127,8 @@ const BookRide = () => {
           } else if (updatedRide.status === 'completed') {
             setStep('completed');
             toast.success('Ride completed! Thank you for riding with GramRide.');
+            // Show rating modal after a short delay
+            setTimeout(() => setShowRatingModal(true), 1000);
           } else if (updatedRide.status === 'cancelled') {
             setStep('type');
             setRideId(null);
@@ -718,6 +741,26 @@ const BookRide = () => {
 
         </div>
       </main>
+
+      {/* Rating Modal */}
+      {showRatingModal && driverInfo && rideId && user && (
+        <RatingModal
+          isOpen={showRatingModal}
+          onClose={() => setShowRatingModal(false)}
+          rideId={rideId}
+          driverId={driverInfo.id}
+          driverName={driverInfo.name}
+          userId={user.id}
+          onRatingSubmitted={() => setShowRatingModal(false)}
+        />
+      )}
+
+      {/* Schedule Modal */}
+      <ScheduleRideModal
+        isOpen={showScheduleModal}
+        onClose={() => setShowScheduleModal(false)}
+        onSchedule={(date) => setScheduledFor(date)}
+      />
     </div>
   );
 };

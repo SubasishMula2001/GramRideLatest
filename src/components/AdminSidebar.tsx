@@ -11,6 +11,7 @@ const navItems = [
   { path: '/admin/users', emoji: '👥', label: 'Users' },
   { path: '/admin/drivers', emoji: '🚗', label: 'Drivers' },
   { path: '/admin/rides', emoji: '🛣️', label: 'Rides' },
+  { path: '/admin/reports', emoji: '📈', label: 'Reports' },
   { path: '/admin/logs', emoji: '📋', label: 'Activity Logs' },
 ];
 

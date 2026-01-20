@@ -99,29 +99,120 @@ export type Database = {
         Row: {
           avatar_url: string | null
           created_at: string | null
+          credits: number | null
           email: string | null
           full_name: string | null
           id: string
           phone: string | null
+          referral_code: string | null
           updated_at: string | null
         }
         Insert: {
           avatar_url?: string | null
           created_at?: string | null
+          credits?: number | null
           email?: string | null
           full_name?: string | null
           id: string
           phone?: string | null
+          referral_code?: string | null
           updated_at?: string | null
         }
         Update: {
           avatar_url?: string | null
           created_at?: string | null
+          credits?: number | null
           email?: string | null
           full_name?: string | null
           id?: string
           phone?: string | null
+          referral_code?: string | null
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      ratings: {
+        Row: {
+          created_at: string
+          driver_id: string
+          feedback: string | null
+          id: string
+          rating: number
+          ride_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          driver_id: string
+          feedback?: string | null
+          id?: string
+          rating: number
+          ride_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          driver_id?: string
+          feedback?: string | null
+          id?: string
+          rating?: number
+          ride_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ratings_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "available_drivers_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ratings_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ratings_ride_id_fkey"
+            columns: ["ride_id"]
+            isOneToOne: false
+            referencedRelation: "rides"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      referrals: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          credits_earned: number | null
+          id: string
+          referral_code: string
+          referred_id: string
+          referrer_id: string
+          status: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          credits_earned?: number | null
+          id?: string
+          referral_code: string
+          referred_id: string
+          referrer_id: string
+          status?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          credits_earned?: number | null
+          id?: string
+          referral_code?: string
+          referred_id?: string
+          referrer_id?: string
+          status?: string
         }
         Relationships: []
       }
@@ -138,11 +229,13 @@ export type Database = {
           duration_mins: number | null
           fare: number | null
           id: string
+          is_scheduled: boolean | null
           otp: string | null
           pickup_lat: number | null
           pickup_lng: number | null
           pickup_location: string
           ride_type: Database["public"]["Enums"]["ride_type"]
+          scheduled_for: string | null
           status: Database["public"]["Enums"]["ride_status"] | null
           user_id: string | null
         }
@@ -158,11 +251,13 @@ export type Database = {
           duration_mins?: number | null
           fare?: number | null
           id?: string
+          is_scheduled?: boolean | null
           otp?: string | null
           pickup_lat?: number | null
           pickup_lng?: number | null
           pickup_location: string
           ride_type: Database["public"]["Enums"]["ride_type"]
+          scheduled_for?: string | null
           status?: Database["public"]["Enums"]["ride_status"] | null
           user_id?: string | null
         }
@@ -178,11 +273,13 @@ export type Database = {
           duration_mins?: number | null
           fare?: number | null
           id?: string
+          is_scheduled?: boolean | null
           otp?: string | null
           pickup_lat?: number | null
           pickup_lng?: number | null
           pickup_location?: string
           ride_type?: Database["public"]["Enums"]["ride_type"]
+          scheduled_for?: string | null
           status?: Database["public"]["Enums"]["ride_status"] | null
           user_id?: string | null
         }
@@ -256,6 +353,7 @@ export type Database = {
         Args: { _driver_id: string; _ride_id: string }
         Returns: boolean
       }
+      generate_referral_code: { Args: never; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
