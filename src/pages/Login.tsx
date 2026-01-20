@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Mail, Lock, ArrowRight, User, Car, Loader2, Phone, Smartphone, Home } from 'lucide-react';
+import { Mail, Lock, ArrowRight, User, Car, Loader2, Home } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import GramRideLogo from '@/components/GramRideLogo';
 import LanguageToggle from '@/components/LanguageToggle';
 import { useAuth } from '@/contexts/AuthContext';
@@ -13,8 +12,6 @@ import { z } from 'zod';
 import { supabase } from '@/integrations/supabase/client';
 
 type UserType = 'user' | 'driver' | 'admin';
-type AuthMethod = 'email' | 'phone';
-type PhoneStep = 'enter' | 'verify';
 
 const emailSchema = z.string().email('Please enter a valid email address');
 const passwordSchema = z.string()
@@ -23,34 +20,36 @@ const passwordSchema = z.string()
   .regex(/[a-z]/, 'Must contain at least one lowercase letter')
   .regex(/[0-9]/, 'Must contain at least one number')
   .regex(/[^A-Za-z0-9]/, 'Must contain at least one special character');
-const phoneSchema = z.string().regex(/^\+?[1-9]\d{9,14}$/, 'Please enter a valid phone number');
 
 const Login = () => {
   const navigate = useNavigate();
-  const { signIn, signUp, signInWithPhone, verifyPhoneOtp, user, loading: authLoading, userRole } = useAuth();
+  const { signIn, signUp, user, loading: authLoading, userRole } = useAuth();
   const { t, language } = useLanguage();
   
   const [userType, setUserType] = useState<UserType>('user');
-  const [authMethod, setAuthMethod] = useState<AuthMethod>('phone');
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [otp, setOtp] = useState('');
-  const [phoneStep, setPhoneStep] = useState<PhoneStep>('enter');
   const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState<{ email?: string; password?: string; fullName?: string; phone?: string }>({});
+  const [errors, setErrors] = useState<{ email?: string; password?: string; fullName?: string }>({});
 
   // Demo credentials - only available in development + preview environments.
   // Keep this disabled on published URLs.
-  const hostname = window.location.hostname;
-  const isDemoEnabled =
-    import.meta.env.DEV ||
-    hostname.includes('-preview--') ||
-    hostname.includes('lovableproject.com') ||
-    hostname.includes('localhost') ||
-    hostname.includes('127.0.0.1');
+  const [isDemoEnabled, setIsDemoEnabled] = useState(false);
+  
+  useEffect(() => {
+    // Check demo availability on client side to ensure consistent behavior across browsers
+    const hostname = window.location.hostname;
+    const isDevOrPreview =
+      import.meta.env.DEV ||
+      hostname.includes('-preview--') ||
+      hostname.includes('lovableproject.com') ||
+      hostname.includes('lovable.app') ||
+      hostname.includes('localhost') ||
+      hostname.includes('127.0.0.1');
+    setIsDemoEnabled(isDevOrPreview);
+  }, []);
   
   const fillDemoCredentials = async () => {
     if (!isDemoEnabled) {
@@ -82,7 +81,6 @@ const Login = () => {
       const demoPassword = data.password || 'Demo@123';
       setEmail(demoEmails[userType]);
       setPassword(demoPassword);
-      setAuthMethod('email');
       setIsLogin(true);
       toast.success(`Demo ${userType} credentials ready. Click login to continue.`);
     } catch (err) {
@@ -92,6 +90,7 @@ const Login = () => {
       setLoading(false);
     }
   };
+
   useEffect(() => {
     if (user && !authLoading) {
       redirectBasedOnRole();
@@ -143,21 +142,6 @@ const Login = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const validatePhoneForm = () => {
-    const newErrors: { phone?: string } = {};
-    
-    try {
-      phoneSchema.parse(phone);
-    } catch (e) {
-      if (e instanceof z.ZodError) {
-        newErrors.phone = t.invalidPhone;
-      }
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -189,73 +173,6 @@ const Login = () => {
         toast.success(t.accountCreated);
         setIsLogin(true);
       }
-    } catch (error) {
-      toast.error(language === 'bn' ? 'কিছু সমস্যা হয়েছে' : 'An unexpected error occurred');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handlePhoneSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!validatePhoneForm()) return;
-    
-    setLoading(true);
-    
-    try {
-      const { error } = await signInWithPhone(phone);
-      
-      if (error) {
-        toast.error(error.message || (language === 'bn' ? 'OTP পাঠাতে সমস্যা হয়েছে' : 'Failed to send OTP'));
-        return;
-      }
-      
-      setPhoneStep('verify');
-      toast.success(t.otpSent);
-    } catch (error) {
-      toast.error(language === 'bn' ? 'কিছু সমস্যা হয়েছে' : 'An unexpected error occurred');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleOtpVerify = async () => {
-    if (otp.length !== 6) {
-      toast.error(t.invalidOtp);
-      return;
-    }
-    
-    setLoading(true);
-    
-    try {
-      const { error } = await verifyPhoneOtp(phone, otp);
-      
-      if (error) {
-        toast.error(error.message || (language === 'bn' ? 'ভুল OTP' : 'Invalid OTP'));
-        return;
-      }
-      
-      toast.success(t.welcomeMessage);
-    } catch (error) {
-      toast.error(language === 'bn' ? 'কিছু সমস্যা হয়েছে' : 'An unexpected error occurred');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleResendOtp = async () => {
-    setLoading(true);
-    
-    try {
-      const { error } = await signInWithPhone(phone);
-      
-      if (error) {
-        toast.error(language === 'bn' ? 'OTP পাঠাতে সমস্যা হয়েছে' : 'Failed to resend OTP');
-        return;
-      }
-      
-      toast.success(language === 'bn' ? 'আবার OTP পাঠানো হয়েছে!' : 'OTP resent successfully!');
     } catch (error) {
       toast.error(language === 'bn' ? 'কিছু সমস্যা হয়েছে' : 'An unexpected error occurred');
     } finally {
@@ -338,260 +255,120 @@ const Login = () => {
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="w-full border-dashed border-2 text-muted-foreground hover:text-primary hover:border-primary"
+                  className="w-full mt-4 border-dashed border-2 text-muted-foreground hover:text-primary hover:border-primary"
                   onClick={fillDemoCredentials}
+                  disabled={loading}
                 >
                   🎯 Use Demo {userType.charAt(0).toUpperCase() + userType.slice(1)} Email
                 </Button>
               )}
             </div>
 
-            {/* Auth Method Toggle - Large Buttons */}
-            <div className="grid grid-cols-2 gap-3 mb-6">
-              <Button
-                type="button"
-                variant={authMethod === 'phone' ? 'default' : 'outline'}
-                size="lg"
-                className="h-14 text-lg font-semibold"
-                onClick={() => {
-                  setAuthMethod('phone');
-                  setIsLogin(true);
-                  setErrors({});
-                }}
-              >
-                <Smartphone className="w-6 h-6 mr-2" />
-                {t.phoneMethod}
-              </Button>
-              <Button
-                type="button"
-                variant={authMethod === 'email' ? 'default' : 'outline'}
-                size="lg"
-                className="h-14 text-lg font-semibold"
-                onClick={() => {
-                  setAuthMethod('email');
-                  setPhoneStep('enter');
-                  setErrors({});
-                }}
-              >
-                <Mail className="w-6 h-6 mr-2" />
-                {t.emailMethod}
-              </Button>
+            {/* Email Auth Badge */}
+            <div className="flex justify-center mb-6">
+              <div className="flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full">
+                <Mail className="w-5 h-5 text-primary" />
+                <span className="text-primary font-medium">{t.emailMethod}</span>
+              </div>
             </div>
 
             {/* Title */}
             <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-2 text-center">
-              {authMethod === 'phone' 
-                ? (phoneStep === 'enter' ? t.loginWithPhone : t.verifyCode)
-                : (isLogin ? t.welcomeBack : t.createAccount)
-              }
+              {isLogin ? t.welcomeBack : t.createAccount}
             </h2>
             <p className="text-muted-foreground mb-6 text-center text-lg">
-              {authMethod === 'phone'
-                ? (phoneStep === 'enter' 
-                    ? t.enterPhoneWithCode
-                    : `${t.otpSentTo} ${phone}`
-                  )
-                : (isLogin 
-                    ? `${t.signIn} ${t.user === userType ? '' : ''}`
-                    : `${t.signUp}`
-                  )
-              }
+              {isLogin ? t.signIn : t.signUp}
             </p>
 
-            {/* Phone OTP Form - Primary Method for Villages */}
-            {authMethod === 'phone' && phoneStep === 'enter' && (
-              <form onSubmit={handlePhoneSubmit} className="space-y-5">
-                <div>
-                  <div className="relative">
-                    <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-6 h-6 text-muted-foreground" />
-                    <Input
-                      type="tel"
-                      placeholder="+91 9876543210"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      className="pl-14 h-16 text-xl rounded-xl border-2"
-                      disabled={loading}
-                    />
-                  </div>
-                  {errors.phone && (
-                    <p className="text-destructive text-base mt-2">{errors.phone}</p>
-                  )}
-                </div>
-
-                <Button 
-                  variant="default" 
-                  size="lg" 
-                  className="w-full h-16 text-xl font-bold rounded-xl bg-primary hover:bg-primary/90"
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <Loader2 className="w-7 h-7 animate-spin" />
-                  ) : (
-                    <>
-                      {t.sendOtp}
-                      <ArrowRight className="w-7 h-7 ml-2" />
-                    </>
-                  )}
-                </Button>
-              </form>
-            )}
-
-            {/* OTP Verification */}
-            {authMethod === 'phone' && phoneStep === 'verify' && (
-              <div className="space-y-6">
-                <div className="flex justify-center">
-                  <InputOTP 
-                    maxLength={6} 
-                    value={otp} 
-                    onChange={setOtp}
-                    disabled={loading}
-                  >
-                    <InputOTPGroup className="gap-2">
-                      {[0, 1, 2, 3, 4, 5].map((index) => (
-                        <InputOTPSlot 
-                          key={index} 
-                          index={index} 
-                          className="w-12 h-14 text-2xl rounded-xl border-2"
-                        />
-                      ))}
-                    </InputOTPGroup>
-                  </InputOTP>
-                </div>
-
-                <Button 
-                  variant="default" 
-                  size="lg"
-                  className="w-full h-16 text-xl font-bold rounded-xl bg-primary hover:bg-primary/90"
-                  onClick={handleOtpVerify}
-                  disabled={loading || otp.length !== 6}
-                >
-                  {loading ? (
-                    <Loader2 className="w-7 h-7 animate-spin" />
-                  ) : (
-                    <>
-                      {t.verifyOtp}
-                      <ArrowRight className="w-7 h-7 ml-2" />
-                    </>
-                  )}
-                </Button>
-
-                <div className="flex justify-between items-center">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPhoneStep('enter');
-                      setOtp('');
-                    }}
-                    className="text-muted-foreground hover:text-foreground transition-colors text-lg"
-                    disabled={loading}
-                  >
-                    {t.changeNumber}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleResendOtp}
-                    className="text-primary font-semibold hover:underline text-lg"
-                    disabled={loading}
-                  >
-                    {t.resendOtp}
-                  </button>
-                </div>
-              </div>
-            )}
-
             {/* Email/Password Form */}
-            {authMethod === 'email' && (
-              <form onSubmit={handleEmailSubmit} className="space-y-4">
-                {!isLogin && (
-                  <div>
-                    <div className="relative">
-                      <User className="absolute left-4 top-1/2 -translate-y-1/2 w-6 h-6 text-muted-foreground" />
-                      <Input
-                        type="text"
-                        placeholder={t.fullName}
-                        value={fullName}
-                        onChange={(e) => setFullName(e.target.value)}
-                        className="pl-14 h-14 text-lg rounded-xl border-2"
-                        disabled={loading}
-                      />
-                    </div>
-                    {errors.fullName && (
-                      <p className="text-destructive text-base mt-2">{errors.fullName}</p>
-                    )}
+            <form onSubmit={handleEmailSubmit} className="space-y-4">
+              {!isLogin && (
+                <div>
+                  <div className="relative">
+                    <User className="absolute left-4 top-1/2 -translate-y-1/2 w-6 h-6 text-muted-foreground" />
+                    <Input
+                      type="text"
+                      placeholder={t.fullName}
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      className="pl-14 h-14 text-lg rounded-xl border-2"
+                      disabled={loading}
+                    />
                   </div>
+                  {errors.fullName && (
+                    <p className="text-destructive text-base mt-2">{errors.fullName}</p>
+                  )}
+                </div>
+              )}
+
+              <div>
+                <div className="relative">
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-6 h-6 text-muted-foreground" />
+                  <Input
+                    type="email"
+                    placeholder={t.email}
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="pl-14 h-14 text-lg rounded-xl border-2"
+                    disabled={loading}
+                  />
+                </div>
+                {errors.email && (
+                  <p className="text-destructive text-base mt-2">{errors.email}</p>
                 )}
+              </div>
 
-                <div>
-                  <div className="relative">
-                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-6 h-6 text-muted-foreground" />
-                    <Input
-                      type="email"
-                      placeholder={t.email}
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="pl-14 h-14 text-lg rounded-xl border-2"
-                      disabled={loading}
-                    />
-                  </div>
-                  {errors.email && (
-                    <p className="text-destructive text-base mt-2">{errors.email}</p>
-                  )}
+              <div>
+                <div className="relative">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-6 h-6 text-muted-foreground" />
+                  <Input
+                    type="password"
+                    placeholder={t.password}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="pl-14 h-14 text-lg rounded-xl border-2"
+                    disabled={loading}
+                  />
                 </div>
+                {errors.password && (
+                  <p className="text-destructive text-base mt-2">{errors.password}</p>
+                )}
+              </div>
 
-                <div>
-                  <div className="relative">
-                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-6 h-6 text-muted-foreground" />
-                    <Input
-                      type="password"
-                      placeholder={t.password}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="pl-14 h-14 text-lg rounded-xl border-2"
-                      disabled={loading}
-                    />
-                  </div>
-                  {errors.password && (
-                    <p className="text-destructive text-base mt-2">{errors.password}</p>
-                  )}
-                </div>
+              <Button 
+                variant="default" 
+                size="lg" 
+                className="w-full h-14 text-xl font-bold rounded-xl"
+                disabled={loading}
+              >
+                {loading ? (
+                  <Loader2 className="w-6 h-6 animate-spin" />
+                ) : (
+                  <>
+                    {isLogin ? t.signIn : t.createAccount}
+                    <ArrowRight className="w-6 h-6 ml-2" />
+                  </>
+                )}
+              </Button>
+            </form>
 
-                <Button 
-                  variant="default" 
-                  size="lg" 
-                  className="w-full h-14 text-xl font-bold rounded-xl"
+            {/* Sign Up/In Toggle */}
+            <div className="mt-6 text-center">
+              <p className="text-muted-foreground text-lg">
+                {isLogin ? t.noAccount : t.haveAccount}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsLogin(!isLogin);
+                    setErrors({});
+                  }}
+                  className="text-primary font-semibold hover:underline ml-2"
                   disabled={loading}
                 >
-                  {loading ? (
-                    <Loader2 className="w-6 h-6 animate-spin" />
-                  ) : (
-                    <>
-                      {isLogin ? t.signIn : t.createAccount}
-                      <ArrowRight className="w-6 h-6 ml-2" />
-                    </>
-                  )}
-                </Button>
-              </form>
-            )}
-
-            {/* Email Sign Up/In Toggle */}
-            {authMethod === 'email' && (
-              <div className="mt-6 text-center">
-                <p className="text-muted-foreground text-lg">
-                  {isLogin ? t.noAccount : t.haveAccount}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsLogin(!isLogin);
-                      setErrors({});
-                    }}
-                    className="text-primary font-semibold hover:underline ml-2"
-                    disabled={loading}
-                  >
-                    {isLogin ? t.signUp : t.signIn}
-                  </button>
-                </p>
-              </div>
-            )}
+                  {isLogin ? t.signUp : t.signIn}
+                </button>
+              </p>
+            </div>
 
           </div>
         </div>
