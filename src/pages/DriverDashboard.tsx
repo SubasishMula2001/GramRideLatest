@@ -515,15 +515,11 @@ const DriverDashboard = () => {
   }
 
   if (!driverData) {
+    // Redirect to registration page
+    navigate('/driver/register');
     return (
-      <div className="min-h-screen bg-gradient-hero flex items-center justify-center p-4">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-foreground mb-4">Not a Registered Driver</h1>
-          <p className="text-muted-foreground mb-6">You need to be registered as a driver to access this page.</p>
-          <Button variant="hero" asChild>
-            <Link to="/">Go Home</Link>
-          </Button>
-        </div>
+      <div className="min-h-screen bg-gradient-hero flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     );
   }
