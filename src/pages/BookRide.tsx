@@ -589,22 +589,49 @@ const BookRide = () => {
               {/* OTP Display Card */}
               {rideOtp && (
                 <div className="bg-gradient-card rounded-2xl border-2 border-secondary shadow-elevated overflow-hidden mb-6 animate-scale-in">
-                  <div className="bg-gradient-secondary px-5 py-3 flex items-center gap-2">
-                    <KeyRound className="w-5 h-5 text-secondary-foreground" />
-                    <p className="text-secondary-foreground font-semibold">Pickup OTP</p>
-                  </div>
-                  <div className="p-6 text-center">
-                    <p className="text-muted-foreground text-sm mb-2">Share this code with your driver at pickup</p>
-                    <div className="flex items-center justify-center gap-3">
+                  <div className="bg-gradient-secondary px-5 py-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <KeyRound className="w-5 h-5 text-secondary-foreground" />
+                      <p className="text-secondary-foreground font-semibold">Pickup OTP</p>
+                    </div>
+                    <div className="flex items-center gap-2">
                       {rideOtp.split('').map((digit, index) => (
                         <div 
                           key={index}
-                          className="w-14 h-16 rounded-xl bg-primary/10 border-2 border-primary flex items-center justify-center"
+                          className="w-8 h-10 rounded-lg bg-secondary-foreground/20 border border-secondary-foreground/30 flex items-center justify-center"
                         >
-                          <span className="text-3xl font-bold text-primary">{digit}</span>
+                          <span className="text-xl font-bold text-secondary-foreground">{digit}</span>
                         </div>
                       ))}
                     </div>
+                  </div>
+                  <div className="p-5">
+                    <p className="text-muted-foreground text-sm mb-4">Share this code with your driver at pickup</p>
+                    
+                    {/* Driver Name & Toto Number */}
+                    {driverInfo && (
+                      <div className="space-y-3 pt-3 border-t border-border/50">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 rounded-lg bg-primary/10">
+                            <User className="w-4 h-4 text-primary" />
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground uppercase">Driver Name</p>
+                            <p className="font-semibold text-foreground">{driverInfo.name}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 rounded-lg bg-secondary/10">
+                            <Car className="w-4 h-4 text-secondary" />
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground uppercase">Toto Number</p>
+                            <p className="font-semibold text-foreground">{driverInfo.vehicle_number}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
                     <p className="text-muted-foreground text-xs mt-4">
                       This ensures you're getting into the right vehicle
                     </p>
