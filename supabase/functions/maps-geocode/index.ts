@@ -45,15 +45,20 @@ function findBestAddress(results: any[]): { address: string; placeId: string } |
 
   // Last resort: use the first result but try to clean the Plus Code
   const firstResult = results[0];
-  let address = firstResult.formatted_address;
-  
-  // Try to remove Plus Code from the beginning (e.g., "5MP3+XP5, Gundut..." -> "Gundut...")
-  const plusCodeMatch = address.match(/^[A-Z0-9]{4}\+[A-Z0-9]{2,3},?\s*/);
-  if (plusCodeMatch) {
-    address = address.substring(plusCodeMatch[0].length);
-  }
+  let address = cleanPlusCode(firstResult.formatted_address);
 
   return { address, placeId: firstResult.place_id };
+}
+
+// Remove Plus Code from any position in the address
+function cleanPlusCode(address: string): string {
+  // Remove Plus Code from the beginning (e.g., "5MP3+XP5, Gundut..." -> "Gundut...")
+  let cleaned = address.replace(/^[A-Z0-9]{4}\+[A-Z0-9]{2,3},?\s*/i, '');
+  
+  // Also remove Plus Code if it appears after a comma (e.g., "Area, 5MP3+XP5, City" -> "Area, City")
+  cleaned = cleaned.replace(/,?\s*[A-Z0-9]{4}\+[A-Z0-9]{2,3}\s*,?/gi, ',').replace(/,\s*,/g, ',').replace(/^,\s*/, '').replace(/,\s*$/, '');
+  
+  return cleaned.trim();
 }
 
 // Verify user authentication

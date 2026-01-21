@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Users, Package, IndianRupee, Clock, MapPin, Navigation, Loader2, CheckCircle, Car, Phone, User, Star, Locate, KeyRound, Calendar } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import GramRideLogo from '@/components/GramRideLogo';
 import BookingTypeCard from '@/components/BookingTypeCard';
@@ -13,6 +14,17 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useDriverLocationSubscription } from '@/hooks/useDriverLocationSubscription';
 import { format } from 'date-fns';
+
+// Helper to clean Plus Codes from addresses
+const cleanPlusCode = (address: string): string => {
+  return address
+    .replace(/^[A-Z0-9]{4}\+[A-Z0-9]{2,3},?\s*/i, '')
+    .replace(/,?\s*[A-Z0-9]{4}\+[A-Z0-9]{2,3}\s*,?/gi, ',')
+    .replace(/,\s*,/g, ',')
+    .replace(/^,\s*/, '')
+    .replace(/,\s*$/, '')
+    .trim();
+};
 
 type BookingType = 'passenger' | 'goods' | null;
 type BookingStep = 'type' | 'location' | 'confirm' | 'searching' | 'booked' | 'in_progress' | 'completed';
@@ -567,11 +579,11 @@ const BookRide = () => {
                     <div className="mt-4 space-y-2">
                       <div className="flex items-center gap-2 text-sm">
                         <Navigation className="w-4 h-4 text-primary" />
-                        <span className="text-foreground">{pickupData.address}</span>
+                        <span className="text-foreground">{cleanPlusCode(pickupData.address)}</span>
                       </div>
                       <div className="flex items-center gap-2 text-sm">
                         <MapPin className="w-4 h-4 text-secondary" />
-                        <span className="text-foreground">{dropData.address}</span>
+                        <span className="text-foreground">{cleanPlusCode(dropData.address)}</span>
                       </div>
                     </div>
 
@@ -606,33 +618,31 @@ const BookRide = () => {
                     </div>
                   </div>
                   <div className="p-5">
-                    <p className="text-muted-foreground text-sm mb-4">Share this code with your driver at pickup</p>
+                    <p className="text-muted-foreground text-sm mb-3">Share this code with your driver at pickup</p>
                     
-                    {/* Driver Name & Toto Number */}
+                    {/* Driver Name & Toto Number - Below OTP */}
                     {driverInfo && (
-                      <div className="space-y-3 pt-3 border-t border-border/50">
+                      <div className="bg-muted/50 rounded-xl p-4 space-y-2">
                         <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-lg bg-primary/10">
-                            <User className="w-4 h-4 text-primary" />
-                          </div>
+                          <User className="w-5 h-5 text-primary" />
                           <div>
-                            <p className="text-xs text-muted-foreground uppercase">Driver Name</p>
+                            <p className="text-xs text-muted-foreground">Driver</p>
                             <p className="font-semibold text-foreground">{driverInfo.name}</p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-lg bg-secondary/10">
-                            <Car className="w-4 h-4 text-secondary" />
+                        {driverInfo.vehicle_number && (
+                          <div className="flex items-center gap-3">
+                            <Car className="w-5 h-5 text-secondary" />
+                            <div>
+                              <p className="text-xs text-muted-foreground">Toto Number</p>
+                              <p className="font-semibold text-foreground">{driverInfo.vehicle_number}</p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="text-xs text-muted-foreground uppercase">Toto Number</p>
-                            <p className="font-semibold text-foreground">{driverInfo.vehicle_number}</p>
-                          </div>
-                        </div>
+                        )}
                       </div>
                     )}
                     
-                    <p className="text-muted-foreground text-xs mt-4">
+                    <p className="text-muted-foreground text-xs mt-3 text-center">
                       This ensures you're getting into the right vehicle
                     </p>
                   </div>
@@ -641,82 +651,113 @@ const BookRide = () => {
             </div>
           )}
 
-          {/* Step: Ride In Progress */}
-          {step === 'in_progress' && (
-            <div className="animate-fade-in py-8">
-              <div className="text-center mb-6">
-                <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-green-500/10 flex items-center justify-center">
-                  <Navigation className="w-10 h-10 text-green-600 animate-pulse" />
-                </div>
-                <h1 className="text-2xl font-bold text-foreground mb-1">
-                  Ride in Progress
-                </h1>
-                <p className="text-muted-foreground">
-                  Enjoy your ride!
-                </p>
-              </div>
+          {/* Step: Ride In Progress - with animation */}
+          <AnimatePresence mode="wait">
+            {step === 'in_progress' && (
+              <motion.div 
+                key="in-progress"
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -30 }}
+                transition={{ duration: 0.5, ease: "easeOut" }}
+                className="py-8"
+              >
+                <motion.div 
+                  className="text-center mb-6"
+                  initial={{ scale: 0.8 }}
+                  animate={{ scale: 1 }}
+                  transition={{ delay: 0.2 }}
+                >
+                  <motion.div 
+                    className="w-20 h-20 mx-auto mb-4 rounded-full bg-green-500/10 flex items-center justify-center"
+                    animate={{ scale: [1, 1.1, 1] }}
+                    transition={{ duration: 2, repeat: Infinity }}
+                  >
+                    <Navigation className="w-10 h-10 text-green-600" />
+                  </motion.div>
+                  <h1 className="text-2xl font-bold text-foreground mb-1">
+                    Ride in Progress
+                  </h1>
+                  <p className="text-muted-foreground">
+                    Enjoy your ride!
+                  </p>
+                </motion.div>
 
-              {/* Live ETA to Drop Card */}
-              {(etaToDrop !== null || distanceToDrop !== null) && (
-                <div className="bg-green-600 rounded-2xl p-4 mb-4">
-                  <div className="flex items-center justify-between text-white">
-                    <div className="flex items-center gap-2">
-                      <Locate className="w-5 h-5" />
-                      <span className="font-medium">En Route</span>
-                    </div>
-                    <div className="text-right">
-                      {etaToDrop !== null && (
-                        <p className="text-xl font-bold">{etaToDrop} min to destination</p>
-                      )}
-                      {distanceToDrop !== null && (
-                        <p className="text-sm opacity-80">{distanceToDrop} km remaining</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Driver Info Card */}
-              {driverInfo && (
-                <div className="bg-gradient-card rounded-2xl border-2 border-green-500 shadow-elevated overflow-hidden mb-6">
-                  <div className="bg-green-600 px-5 py-3">
-                    <p className="text-white font-semibold">Ride in Progress</p>
-                  </div>
-                  
-                  <div className="p-5">
-                    <div className="flex items-center gap-4 mb-4">
-                      <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
-                        <User className="w-7 h-7 text-primary" />
+                {/* Live ETA to Drop Card */}
+                {(etaToDrop !== null || distanceToDrop !== null) && (
+                  <motion.div 
+                    className="bg-green-600 rounded-2xl p-4 mb-4"
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.3 }}
+                  >
+                    <div className="flex items-center justify-between text-white">
+                      <div className="flex items-center gap-2">
+                        <Locate className="w-5 h-5" />
+                        <span className="font-medium">En Route</span>
                       </div>
-                      <div className="flex-1">
-                        <h3 className="text-lg font-bold text-foreground">{driverInfo.name}</h3>
-                        <p className="text-sm text-muted-foreground">{driverInfo.vehicle_type} • {driverInfo.vehicle_number}</p>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2 text-sm">
-                        <Navigation className="w-4 h-4 text-primary" />
-                        <span className="text-foreground">{pickupData.address}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-sm">
-                        <MapPin className="w-4 h-4 text-secondary" />
-                        <span className="text-foreground">{dropData.address}</span>
+                      <div className="text-right">
+                        {etaToDrop !== null && (
+                          <p className="text-xl font-bold">{etaToDrop} min to destination</p>
+                        )}
+                        {distanceToDrop !== null && (
+                          <p className="text-sm opacity-80">{distanceToDrop} km remaining</p>
+                        )}
                       </div>
                     </div>
+                  </motion.div>
+                )}
 
-                    <div className="mt-4 pt-4 border-t border-border/50 flex items-center justify-between">
-                      <span className="text-muted-foreground">Fare</span>
-                      <span className="text-xl font-bold text-primary flex items-center">
-                        <IndianRupee className="w-5 h-5" />
-                        {estimatedFare}
-                      </span>
+                {/* Driver Info Card */}
+                {driverInfo && (
+                  <motion.div 
+                    className="bg-gradient-card rounded-2xl border-2 border-green-500 shadow-elevated overflow-hidden mb-6"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.4 }}
+                  >
+                    <div className="bg-green-600 px-5 py-3">
+                      <p className="text-white font-semibold">Ride in Progress</p>
                     </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+                    
+                    <div className="p-5">
+                      <div className="flex items-center gap-4 mb-4">
+                        <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
+                          <User className="w-7 h-7 text-primary" />
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="text-lg font-bold text-foreground">{driverInfo.name}</h3>
+                          <p className="text-sm text-muted-foreground">
+                            {driverInfo.vehicle_type}
+                            {driverInfo.vehicle_number && ` • ${driverInfo.vehicle_number}`}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-sm">
+                          <Navigation className="w-4 h-4 text-primary" />
+                          <span className="text-foreground">{cleanPlusCode(pickupData.address)}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm">
+                          <MapPin className="w-4 h-4 text-secondary" />
+                          <span className="text-foreground">{cleanPlusCode(dropData.address)}</span>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 pt-4 border-t border-border/50 flex items-center justify-between">
+                        <span className="text-muted-foreground">Fare</span>
+                        <span className="text-xl font-bold text-primary flex items-center">
+                          <IndianRupee className="w-5 h-5" />
+                          {estimatedFare}
+                        </span>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Step: Ride Completed */}
           {step === 'completed' && (
