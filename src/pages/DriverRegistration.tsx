@@ -41,19 +41,23 @@ const DriverRegistration = () => {
       // Check if user already has a driver record
       checkExistingDriver();
     }
-  }, [user, authLoading]);
+  }, [user, authLoading, navigate]);
 
   const checkExistingDriver = async () => {
     if (!user) return;
     
     try {
+      // Use a simpler query that works with RLS
       const { data, error } = await supabase
         .from('drivers')
         .select('id')
         .eq('user_id', user.id)
         .maybeSingle();
 
-      if (error) throw error;
+      // If there's an error but it's not a "no rows" error, log it
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error checking driver status:', error);
+      }
 
       if (data) {
         // Driver already registered, redirect to dashboard
