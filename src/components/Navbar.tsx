@@ -26,7 +26,9 @@ const Navbar: React.FC = () => {
 
   const handleSignOut = async () => {
     await signOut();
-    navigate('/');
+    navigate('/login');
+    // Force a page reload to ensure all state is cleared
+    window.location.reload();
   };
 
   const isActive = (path: string) => location.pathname === path;
