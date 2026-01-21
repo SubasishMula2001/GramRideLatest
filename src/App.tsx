@@ -12,6 +12,7 @@ import BookRide from "./pages/BookRide";
 import DriverDashboard from "./pages/DriverDashboard";
 import DriverProfile from "./pages/DriverProfile";
 import DriverAnalytics from "./pages/driver/DriverAnalytics";
+import DriverRegistration from "./pages/DriverRegistration";
 import UserProfile from "./pages/UserProfile";
 import Login from "./pages/Login";
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -50,6 +51,11 @@ const App = () => (
             } />
             
             {/* Driver Routes */}
+            <Route path="/driver/register" element={
+              <ProtectedRoute allowedRoles={['driver']}>
+                <DriverRegistration />
+              </ProtectedRoute>
+            } />
             <Route path="/driver" element={
               <ProtectedRoute allowedRoles={['driver']}>
                 <DriverDashboard />
