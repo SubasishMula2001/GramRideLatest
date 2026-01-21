@@ -2,6 +2,17 @@ import React from 'react';
 import { MapPin, Navigation, Clock, IndianRupee, User, Package } from 'lucide-react';
 import { Button } from './ui/button';
 
+// Helper to clean Plus Codes from addresses
+const cleanPlusCode = (address: string): string => {
+  return address
+    .replace(/^[A-Z0-9]{4}\+[A-Z0-9]{2,3},?\s*/i, '')
+    .replace(/,?\s*[A-Z0-9]{4}\+[A-Z0-9]{2,3}\s*,?/gi, ',')
+    .replace(/,\s*,/g, ',')
+    .replace(/^,\s*/, '')
+    .replace(/,\s*$/, '')
+    .trim();
+};
+
 interface RideCardProps {
   id: string;
   type: 'passenger' | 'goods';
@@ -70,7 +81,7 @@ const RideCard: React.FC<RideCardProps> = ({
             </div>
             <div>
               <p className="text-xs text-muted-foreground font-medium uppercase">Pickup</p>
-              <p className="text-foreground font-medium">{pickup}</p>
+              <p className="text-foreground font-medium">{cleanPlusCode(pickup)}</p>
             </div>
           </div>
           
@@ -80,7 +91,7 @@ const RideCard: React.FC<RideCardProps> = ({
             </div>
             <div>
               <p className="text-xs text-muted-foreground font-medium uppercase">Drop</p>
-              <p className="text-foreground font-medium">{drop}</p>
+              <p className="text-foreground font-medium">{cleanPlusCode(drop)}</p>
             </div>
           </div>
         </div>
