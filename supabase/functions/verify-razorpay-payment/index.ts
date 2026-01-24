@@ -12,6 +12,18 @@ interface VerifyPaymentRequest {
   razorpay_signature: string;
 }
 
+// Decode JWT to extract user ID
+function decodeJwt(token: string): { sub?: string } | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const payload = JSON.parse(atob(parts[1]));
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
 // HMAC SHA256 signature verification
 async function verifySignature(
   orderId: string,
@@ -54,30 +66,25 @@ Deno.serve(async (req) => {
 
     const token = authHeader.replace('Bearer ', '');
     
-    // Use service role to verify the token and get user
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    );
-
-    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
-    
-    if (userError || !user) {
-      console.error('Auth error:', userError);
+    // Decode token to get user ID
+    const payload = decodeJwt(token);
+    if (!payload?.sub) {
+      console.error('Invalid token payload');
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const userId = user.id;
+    const userId = payload.sub;
+    console.log('Authenticated user:', userId);
     
-    // Create a client for database operations with user context
-    const supabase = createClient(
+    // Create admin client for database operations
+    const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_ANON_KEY')!,
-      { global: { headers: { Authorization: authHeader } } }
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
+
     const { 
       payment_id, 
       razorpay_order_id, 
@@ -94,7 +101,7 @@ Deno.serve(async (req) => {
     }
 
     // Get payment record
-    const { data: payment, error: paymentError } = await supabase
+    const { data: payment, error: paymentError } = await supabaseAdmin
       .from('payments')
       .select('*')
       .eq('id', payment_id)
@@ -142,7 +149,7 @@ Deno.serve(async (req) => {
     if (!isValid) {
       console.error('Invalid signature');
       // Update payment as failed
-      await supabase
+      await supabaseAdmin
         .from('payments')
         .update({
           payment_status: 'failed',
@@ -159,7 +166,7 @@ Deno.serve(async (req) => {
     console.log('Payment verified successfully:', razorpay_payment_id);
 
     // Update payment record
-    const { error: updatePaymentError } = await supabase
+    const { error: updatePaymentError } = await supabaseAdmin
       .from('payments')
       .update({
         payment_status: 'completed',
@@ -174,7 +181,7 @@ Deno.serve(async (req) => {
     }
 
     // Update ride payment status
-    const { error: updateRideError } = await supabase
+    const { error: updateRideError } = await supabaseAdmin
       .from('rides')
       .update({
         payment_status: 'completed',

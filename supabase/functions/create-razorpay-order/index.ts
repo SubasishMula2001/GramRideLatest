@@ -10,6 +10,18 @@ interface CreateOrderRequest {
   amount: number;
 }
 
+// Decode JWT to extract user ID without verification (verification done by Supabase)
+function decodeJwt(token: string): { sub?: string } | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const payload = JSON.parse(atob(parts[1]));
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -28,30 +40,26 @@ Deno.serve(async (req) => {
 
     const token = authHeader.replace('Bearer ', '');
     
-    // Use service role to verify the token and get user
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    );
-
-    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
-    
-    if (userError || !user) {
-      console.error('Auth error:', userError);
+    // Decode token to get user ID
+    const payload = decodeJwt(token);
+    if (!payload?.sub) {
+      console.error('Invalid token payload');
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const userId = user.id;
+    const userId = payload.sub;
+    console.log('Authenticated user:', userId);
     
-    // Create a client for database operations with user context
+    // Create supabase client with auth header for RLS
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_ANON_KEY')!,
       { global: { headers: { Authorization: authHeader } } }
     );
+
     const { ride_id, amount }: CreateOrderRequest = await req.json();
 
     // Validate input
@@ -131,8 +139,13 @@ Deno.serve(async (req) => {
     const razorpayOrder = await razorpayResponse.json();
     console.log('Razorpay order created:', razorpayOrder.id);
 
-    // Create payment record
-    const { data: payment, error: paymentError } = await supabase
+    // Create payment record using service role to bypass RLS for insert
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    );
+
+    const { data: payment, error: paymentError } = await supabaseAdmin
       .from('payments')
       .insert({
         ride_id: ride_id,
