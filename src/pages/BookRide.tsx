@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Users, Package, IndianRupee, Clock, MapPin, Navigation, Loader2, CheckCircle, Car, Phone, User, Star, Locate, KeyRound, Calendar } from 'lucide-react';
+import { ArrowLeft, Users, Package, IndianRupee, Clock, MapPin, Navigation, Loader2, CheckCircle, Car, Phone, User, Star, Locate, KeyRound, Calendar, CreditCard } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import GramRideLogo from '@/components/GramRideLogo';
@@ -9,6 +9,7 @@ import SecurePlaceInput from '@/components/SecurePlaceInput';
 import SecureRouteMap from '@/components/SecureRouteMap';
 import RatingModal from '@/components/RatingModal';
 import ScheduleRideModal from '@/components/ScheduleRideModal';
+import PaymentModal from '@/components/PaymentModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -62,6 +63,8 @@ const BookRide = () => {
   const [rideOtp, setRideOtp] = useState<string | null>(null);
   const [showRatingModal, setShowRatingModal] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentCompleted, setPaymentCompleted] = useState(false);
   const [scheduledFor, setScheduledFor] = useState<Date | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   
@@ -138,9 +141,9 @@ const BookRide = () => {
             toast.info('Your ride has started!');
           } else if (updatedRide.status === 'completed') {
             setStep('completed');
-            toast.success('Ride completed! Thank you for riding with GramRide.');
-            // Show rating modal after a short delay
-            setTimeout(() => setShowRatingModal(true), 1000);
+            toast.success('Ride completed!');
+            // Show payment modal first
+            setTimeout(() => setShowPaymentModal(true), 500);
           } else if (updatedRide.status === 'cancelled') {
             setStep('type');
             setRideId(null);
@@ -793,11 +796,32 @@ const BookRide = () => {
                   <span className="text-foreground">{cleanPlusCode(dropData.address)}</span>
                 </div>
                 <div className="border-t border-border pt-4 flex items-center justify-between">
-                  <span className="text-muted-foreground">Total Fare Paid</span>
+                  <span className="text-muted-foreground">Total Fare</span>
                   <span className="text-xl font-bold text-primary flex items-center">
                     <IndianRupee className="w-5 h-5" />
                     {estimatedFare}
                   </span>
+                </div>
+                
+                {/* Payment Status */}
+                <div className="mt-4 pt-4 border-t border-border flex items-center justify-between">
+                  <span className="text-muted-foreground">Payment Status</span>
+                  {paymentCompleted ? (
+                    <span className="text-sm font-medium text-green-600 flex items-center gap-1">
+                      <CheckCircle className="w-4 h-4" />
+                      Paid
+                    </span>
+                  ) : (
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => setShowPaymentModal(true)}
+                      className="flex items-center gap-1"
+                    >
+                      <CreditCard className="w-4 h-4" />
+                      Pay Now
+                    </Button>
+                  )}
                 </div>
               </div>
 
@@ -829,6 +853,22 @@ const BookRide = () => {
         onClose={() => setShowScheduleModal(false)}
         onSchedule={(date) => setScheduledFor(date)}
       />
+
+      {/* Payment Modal */}
+      {rideId && (
+        <PaymentModal
+          isOpen={showPaymentModal}
+          onClose={() => setShowPaymentModal(false)}
+          rideId={rideId}
+          amount={estimatedFare}
+          onPaymentComplete={() => {
+            setPaymentCompleted(true);
+            setShowPaymentModal(false);
+            // Show rating modal after payment
+            setTimeout(() => setShowRatingModal(true), 500);
+          }}
+        />
+      )}
     </div>
   );
 };
