@@ -116,16 +116,34 @@ const SecurePlaceInput: React.FC<SecurePlaceInputProps> = ({
       const details = await getPlaceDetails(prediction.placeId, sessionToken);
       
       if (details) {
-        setInputValue(details.address);
-        onChange(details.address, details.lat, details.lng);
+        // Prefer the specific place name from the prediction (what user clicked)
+        // Fall back to details.name, then details.address
+        const displayName = prediction.mainText || details.name || details.address;
+        
+        // For the address passed to parent, use the name + city/state for context if available
+        // This ensures both display and backend get meaningful location info
+        let fullDisplayAddress = displayName;
+        if (prediction.secondaryText && !displayName.includes(prediction.secondaryText.split(',')[0])) {
+          fullDisplayAddress = `${displayName}, ${prediction.secondaryText}`;
+        }
+        
+        setInputValue(fullDisplayAddress);
+        onChange(fullDisplayAddress, details.lat, details.lng);
       } else {
-        setInputValue(prediction.description);
-        onChange(prediction.description);
+        // Fallback to prediction description
+        const displayName = prediction.mainText 
+          ? `${prediction.mainText}${prediction.secondaryText ? `, ${prediction.secondaryText}` : ''}`
+          : prediction.description;
+        setInputValue(displayName);
+        onChange(displayName);
       }
     } catch (error) {
       console.error('Failed to get place details:', error);
-      setInputValue(prediction.description);
-      onChange(prediction.description);
+      const displayName = prediction.mainText 
+        ? `${prediction.mainText}${prediction.secondaryText ? `, ${prediction.secondaryText}` : ''}`
+        : prediction.description;
+      setInputValue(displayName);
+      onChange(displayName);
     } finally {
       setIsLoading(false);
     }
