@@ -26,14 +26,15 @@ Deno.serve(async (req) => {
       );
     }
 
-    const supabase = createClient(
+    const token = authHeader.replace('Bearer ', '');
+    
+    // Use service role to verify the token and get user
+    const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_ANON_KEY')!,
-      { global: { headers: { Authorization: authHeader } } }
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    // Get user from the token
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
     
     if (userError || !user) {
       console.error('Auth error:', userError);
@@ -44,6 +45,13 @@ Deno.serve(async (req) => {
     }
 
     const userId = user.id;
+    
+    // Create a client for database operations with user context
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_ANON_KEY')!,
+      { global: { headers: { Authorization: authHeader } } }
+    );
     const { ride_id, amount }: CreateOrderRequest = await req.json();
 
     // Validate input
