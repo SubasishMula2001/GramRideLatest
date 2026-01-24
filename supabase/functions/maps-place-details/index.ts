@@ -17,7 +17,7 @@ function cleanPlusCode(address: string): string {
     .trim();
 }
 
-// Verify user authentication
+// Verify user authentication using getClaims (works with signing-keys)
 async function verifyAuth(req: Request, corsHeaders: Record<string, string>): Promise<{ userId: string } | Response> {
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
@@ -34,16 +34,17 @@ async function verifyAuth(req: Request, corsHeaders: Record<string, string>): Pr
   });
 
   const token = authHeader.replace("Bearer ", "");
-  const { data, error } = await supabase.auth.getUser(token);
+  const { data, error } = await supabase.auth.getClaims(token);
   
-  if (error || !data?.user) {
+  if (error || !data?.claims?.sub) {
+    console.error("Auth verification failed:", error?.message || "No claims found");
     return new Response(
       JSON.stringify({ error: "Invalid authentication" }),
       { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 
-  return { userId: data.user.id };
+  return { userId: data.claims.sub as string };
 }
 
 serve(async (req) => {
