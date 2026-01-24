@@ -14,6 +14,7 @@ import {
   Loader2,
   MapPin,
   CheckCircle,
+  XCircle,
   Phone,
   Package,
   Car,
@@ -468,23 +469,24 @@ const DriverDashboard = () => {
     setShowPaymentConfirmModal(true);
   };
 
-  const handleConfirmPayment = async () => {
+  const handleConfirmPayment = async (paymentReceived: boolean = true) => {
     if (!activeRide || !driverData) return;
 
     setProcessingPayment(true);
     try {
-      // Call edge function to process payment
-      const { data, error: paymentError } = await supabase.functions.invoke('process-cash-payment', {
-        body: {
-          ride_id: activeRide.id,
-          amount: activeRide.fare,
-          confirmed_by: 'driver',
-        },
-      });
+      if (paymentReceived) {
+        // Call edge function to process payment
+        const { data, error: paymentError } = await supabase.functions.invoke('process-cash-payment', {
+          body: {
+            ride_id: activeRide.id,
+            amount: activeRide.fare,
+            confirmed_by: 'driver',
+          },
+        });
 
-      if (paymentError) {
-        console.error('Payment confirmation error:', paymentError);
-        // Continue with ride completion even if payment recording fails
+        if (paymentError) {
+          console.error('Payment confirmation error:', paymentError);
+        }
       }
 
       // Update ride status to completed
@@ -493,21 +495,27 @@ const DriverDashboard = () => {
         .update({ 
           status: 'completed',
           completed_at: new Date().toISOString(),
-          payment_status: 'completed',
-          payment_method: selectedPaymentConfirm
+          payment_status: paymentReceived ? 'completed' : 'pending',
+          payment_method: paymentReceived ? selectedPaymentConfirm : activeRide.payment_method
         })
         .eq('id', activeRide.id);
 
       if (error) throw error;
 
-      // Update earnings
-      await supabase
-        .from('drivers')
-        .update({ earnings: (driverData.earnings || 0) + activeRide.fare })
-        .eq('id', driverData.id);
+      // Update earnings only if payment was received
+      if (paymentReceived) {
+        await supabase
+          .from('drivers')
+          .update({ earnings: (driverData.earnings || 0) + activeRide.fare })
+          .eq('id', driverData.id);
+      }
 
-      const paymentLabel = selectedPaymentConfirm === 'upi' ? 'UPI' : 'Cash';
-      toast.success(`Ride completed! ₹${activeRide.fare} received via ${paymentLabel}`);
+      if (paymentReceived) {
+        const paymentLabel = selectedPaymentConfirm === 'upi' ? 'UPI' : 'Cash';
+        toast.success(`Ride completed! ₹${activeRide.fare} received via ${paymentLabel}`);
+      } else {
+        toast.warning(`Ride completed. Payment pending from customer.`);
+      }
       
       setShowPaymentConfirmModal(false);
       setActiveRide(null);
@@ -517,12 +525,13 @@ const DriverDashboard = () => {
 
       await supabase.from('activity_logs').insert({
         user_id: user?.id,
-        action: 'Ride Completed with Payment',
+        action: paymentReceived ? 'Ride Completed with Payment' : 'Ride Completed - Payment Pending',
         details: { 
           ride_id: activeRide.id, 
           driver_id: driverData.id, 
           fare: activeRide.fare,
-          payment_method: selectedPaymentConfirm 
+          payment_method: selectedPaymentConfirm,
+          payment_received: paymentReceived
         }
       });
     } catch (error) {
@@ -977,7 +986,7 @@ const DriverDashboard = () => {
                 <Button
                   className="w-full bg-green-600 hover:bg-green-700"
                   size="lg"
-                  onClick={handleConfirmPayment}
+                  onClick={() => handleConfirmPayment(true)}
                   disabled={processingPayment}
                 >
                   {processingPayment ? (
@@ -986,6 +995,18 @@ const DriverDashboard = () => {
                     <CheckCircle className="w-4 h-4 mr-2" />
                   )}
                   {processingPayment ? 'Processing...' : 'Yes, I Received Cash ₹' + (activeRide?.fare || 0)}
+                </Button>
+
+                {/* Not Paid Button */}
+                <Button
+                  variant="outline"
+                  className="w-full border-destructive/50 text-destructive hover:bg-destructive/10"
+                  size="lg"
+                  onClick={() => handleConfirmPayment(false)}
+                  disabled={processingPayment}
+                >
+                  <XCircle className="w-4 h-4 mr-2" />
+                  Not Paid - Complete Anyway
                 </Button>
               </div>
             ) : (
@@ -1033,7 +1054,7 @@ const DriverDashboard = () => {
                 <Button
                   className="w-full"
                   size="lg"
-                  onClick={handleConfirmPayment}
+                  onClick={() => handleConfirmPayment(true)}
                   disabled={processingPayment}
                 >
                   {processingPayment ? (
