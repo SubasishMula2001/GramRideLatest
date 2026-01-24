@@ -20,3 +20,12 @@ verify_jwt = false
 
 [functions.maps-static]
 verify_jwt = false
+
+[functions.create-razorpay-order]
+verify_jwt = false
+
+[functions.verify-razorpay-payment]
+verify_jwt = false
+
+[functions.process-cash-payment]
+verify_jwt = false
