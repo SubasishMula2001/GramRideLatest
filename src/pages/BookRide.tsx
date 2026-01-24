@@ -589,15 +589,19 @@ const BookRide = () => {
                         </div>
                       </div>
                       {driverInfo.phone && (
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-lg bg-green-500/10">
-                            <Phone className="w-5 h-5 text-green-600" />
+                        <a 
+                          href={`tel:${driverInfo.phone}`}
+                          className="flex items-center gap-3 p-3 bg-green-500/10 hover:bg-green-500/20 rounded-xl transition-colors"
+                        >
+                          <div className="p-2 rounded-lg bg-green-500">
+                            <Phone className="w-5 h-5 text-white" />
                           </div>
-                          <div>
-                            <p className="text-xs text-muted-foreground uppercase">Phone</p>
-                            <p className="font-semibold text-foreground">{driverInfo.phone}</p>
+                          <div className="flex-1">
+                            <p className="text-xs text-muted-foreground uppercase">Tap to Call</p>
+                            <p className="font-semibold text-green-600">{driverInfo.phone}</p>
                           </div>
-                        </div>
+                          <span className="text-green-600 font-medium">Call →</span>
+                        </a>
                       )}
                     </div>
 
@@ -757,6 +761,14 @@ const BookRide = () => {
                             {driverInfo.vehicle_number && ` • ${driverInfo.vehicle_number}`}
                           </p>
                         </div>
+                        {driverInfo.phone && (
+                          <a 
+                            href={`tel:${driverInfo.phone}`}
+                            className="p-3 bg-green-500 hover:bg-green-600 rounded-full transition-colors shadow-lg"
+                          >
+                            <Phone className="w-5 h-5 text-white" />
+                          </a>
+                        )}
                       </div>
 
                       <div className="space-y-2">
