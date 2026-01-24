@@ -2,6 +2,17 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Loader2, MapPin, Navigation, ArrowRight, Map } from 'lucide-react';
 import { useMapsProxy } from '@/hooks/useMapsProxy';
 
+// Helper to clean Plus Codes from addresses (e.g., "5MP3+XP5, Location" -> "Location")
+const cleanPlusCode = (address: string): string => {
+  return address
+    .replace(/^[A-Z0-9]{4}\+[A-Z0-9]{2,4},?\s*/i, '')
+    .replace(/,?\s*[A-Z0-9]{4}\+[A-Z0-9]{2,4}\s*,?/gi, ',')
+    .replace(/,\s*,/g, ',')
+    .replace(/^,\s*/, '')
+    .replace(/,\s*$/, '')
+    .trim();
+};
+
 interface SecureRouteMapProps {
   pickupLat?: number;
   pickupLng?: number;
@@ -196,7 +207,7 @@ const SecureRouteMap: React.FC<SecureRouteMapProps> = ({
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-xs text-muted-foreground">Pickup</p>
-            <p className="text-sm font-medium text-foreground truncate">{routeInfo.startAddress}</p>
+            <p className="text-sm font-medium text-foreground truncate">{cleanPlusCode(routeInfo.startAddress)}</p>
           </div>
         </div>
 
@@ -210,7 +221,7 @@ const SecureRouteMap: React.FC<SecureRouteMapProps> = ({
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-xs text-muted-foreground">Drop-off</p>
-            <p className="text-sm font-medium text-foreground truncate">{routeInfo.endAddress}</p>
+            <p className="text-sm font-medium text-foreground truncate">{cleanPlusCode(routeInfo.endAddress)}</p>
           </div>
         </div>
       </div>
