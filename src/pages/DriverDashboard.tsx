@@ -1064,6 +1064,18 @@ const DriverDashboard = () => {
                   )}
                   {processingPayment ? 'Processing...' : 'Confirm & Complete Ride'}
                 </Button>
+
+                {/* Not Paid Button */}
+                <Button
+                  variant="outline"
+                  className="w-full border-destructive/50 text-destructive hover:bg-destructive/10"
+                  size="lg"
+                  onClick={() => handleConfirmPayment(false)}
+                  disabled={processingPayment}
+                >
+                  <XCircle className="w-4 h-4 mr-2" />
+                  Not Paid - Complete Anyway
+                </Button>
               </>
             )}
           </div>

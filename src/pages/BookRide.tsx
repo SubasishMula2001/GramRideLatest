@@ -132,6 +132,11 @@ const BookRide = () => {
         },
         async (payload) => {
           const updatedRide = payload.new as any;
+
+          // Keep local payment UI in sync with backend payment status
+          if (updatedRide?.payment_status) {
+            setPaymentCompleted(updatedRide.payment_status === 'completed');
+          }
           
           // Handle status transitions based on the new status from database
           if (updatedRide.status === 'accepted' && updatedRide.driver_id) {
