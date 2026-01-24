@@ -29,6 +29,15 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     return <Navigate to={redirectTo} state={{ from: location }} replace />;
   }
 
+  // Wait for role to be fetched if allowedRoles is specified
+  if (allowedRoles && userRole === null) {
+    return (
+      <div className="min-h-screen bg-gradient-hero flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   if (allowedRoles && userRole && !allowedRoles.includes(userRole)) {
     // Redirect to appropriate dashboard based on role
     if (userRole === 'admin') {
