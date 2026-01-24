@@ -356,8 +356,8 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
             </>
           )}
 
-          {/* Processing State */}
-          {paymentStatus === 'processing' && !isLoading && (
+          {/* Processing State - only show during actual loading */}
+          {paymentStatus === 'processing' && isLoading && (
             <div className="flex flex-col items-center gap-2 py-6">
               <Loader2 className="h-12 w-12 text-primary animate-spin" />
               <p className="text-sm text-muted-foreground">
