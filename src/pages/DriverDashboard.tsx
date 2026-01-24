@@ -83,6 +83,12 @@ interface ActiveRide {
 
 type PaymentConfirmMethod = 'upi' | 'cash';
 
+type PaymentContext = {
+  rideId: string;
+  fare: number;
+  existingPaymentMethod?: 'upi' | 'cash' | null;
+};
+
 interface DriverData {
   id: string;
   is_available: boolean;
@@ -107,6 +113,7 @@ const DriverDashboard = () => {
   const [showPaymentConfirmModal, setShowPaymentConfirmModal] = useState(false);
   const [selectedPaymentConfirm, setSelectedPaymentConfirm] = useState<PaymentConfirmMethod>('cash');
   const [processingPayment, setProcessingPayment] = useState(false);
+  const [paymentContext, setPaymentContext] = useState<PaymentContext | null>(null);
 
   // Track driver location during active rides
   useDriverLocationTracking({
@@ -464,29 +471,38 @@ const DriverDashboard = () => {
 
   const handleFinishRide = () => {
     if (!activeRide) return;
-    // Default to cash - driver will select actual payment method
-    setSelectedPaymentConfirm('cash');
+    // Snapshot the ride so modal keeps working even if activeRide becomes null (e.g. status changes quickly)
+    setPaymentContext({
+      rideId: activeRide.id,
+      fare: activeRide.fare,
+      existingPaymentMethod: activeRide.payment_method,
+    });
+
+    setSelectedPaymentConfirm((activeRide.payment_method || 'cash') as PaymentConfirmMethod);
     setShowPaymentConfirmModal(true);
   };
 
   const handleConfirmPayment = async (paymentReceived: boolean = true) => {
-    if (!activeRide || !driverData) return;
+    if (!driverData) return;
+
+    const rideId = paymentContext?.rideId ?? activeRide?.id;
+    const fare = paymentContext?.fare ?? activeRide?.fare;
+
+    if (!rideId || fare == null) return;
 
     setProcessingPayment(true);
     try {
-      if (paymentReceived) {
-        // Call edge function to process payment
-        const { data, error: paymentError } = await supabase.functions.invoke('process-cash-payment', {
+      // Only the cash flow has a backend function (creates a payments row + links it)
+      if (paymentReceived && selectedPaymentConfirm === 'cash') {
+        const { error: paymentError } = await supabase.functions.invoke('process-cash-payment', {
           body: {
-            ride_id: activeRide.id,
-            amount: activeRide.fare,
+            ride_id: rideId,
+            amount: fare,
             confirmed_by: 'driver',
           },
         });
 
-        if (paymentError) {
-          console.error('Payment confirmation error:', paymentError);
-        }
+        if (paymentError) console.error('Payment confirmation error:', paymentError);
       }
 
       // Update ride status to completed
@@ -496,9 +512,10 @@ const DriverDashboard = () => {
           status: 'completed',
           completed_at: new Date().toISOString(),
           payment_status: paymentReceived ? 'completed' : 'pending',
-          payment_method: paymentReceived ? selectedPaymentConfirm : activeRide.payment_method
+          // Driver selects the method regardless of paid/unpaid
+          payment_method: selectedPaymentConfirm
         })
-        .eq('id', activeRide.id);
+        .eq('id', rideId);
 
       if (error) throw error;
 
@@ -506,18 +523,19 @@ const DriverDashboard = () => {
       if (paymentReceived) {
         await supabase
           .from('drivers')
-          .update({ earnings: (driverData.earnings || 0) + activeRide.fare })
+          .update({ earnings: (driverData.earnings || 0) + fare })
           .eq('id', driverData.id);
       }
 
       if (paymentReceived) {
         const paymentLabel = selectedPaymentConfirm === 'upi' ? 'UPI' : 'Cash';
-        toast.success(`Ride completed! ₹${activeRide.fare} received via ${paymentLabel}`);
+        toast.success(`Ride completed! ₹${fare} received via ${paymentLabel}`);
       } else {
         toast.warning(`Ride completed. Payment pending from customer.`);
       }
       
       setShowPaymentConfirmModal(false);
+      setPaymentContext(null);
       setActiveRide(null);
       
       // Refresh driver data
@@ -527,9 +545,9 @@ const DriverDashboard = () => {
         user_id: user?.id,
         action: paymentReceived ? 'Ride Completed with Payment' : 'Ride Completed - Payment Pending',
         details: { 
-          ride_id: activeRide.id, 
+          ride_id: rideId, 
           driver_id: driverData.id, 
-          fare: activeRide.fare,
+          fare,
           payment_method: selectedPaymentConfirm,
           payment_received: paymentReceived
         }
@@ -541,6 +559,8 @@ const DriverDashboard = () => {
       setProcessingPayment(false);
     }
   };
+
+  const paymentFare = paymentContext?.fare ?? activeRide?.fare ?? 0;
 
   const handleDeclineRide = (rideId: string) => {
     setPendingRides(prev => prev.filter(r => r.id !== rideId));
@@ -924,8 +944,14 @@ const DriverDashboard = () => {
       </main>
 
       {/* Payment Confirmation Modal */}
-      <Dialog open={showPaymentConfirmModal} onOpenChange={setShowPaymentConfirmModal}>
-        <DialogContent className="sm:max-w-md">
+      <Dialog
+        open={showPaymentConfirmModal}
+        onOpenChange={(open) => {
+          setShowPaymentConfirmModal(open);
+          if (!open) setPaymentContext(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <CreditCard className="h-5 w-5 text-primary" />
@@ -942,7 +968,7 @@ const DriverDashboard = () => {
               <p className="text-sm text-muted-foreground">Total Fare</p>
               <p className="text-3xl font-bold text-primary flex items-center justify-center">
                 <IndianRupee className="w-7 h-7" />
-                {activeRide?.fare || 0}
+                  {paymentFare}
               </p>
             </div>
 
@@ -999,7 +1025,7 @@ const DriverDashboard = () => {
               )}
               {processingPayment 
                 ? 'Processing...' 
-                : `Yes, Received ₹${activeRide?.fare || 0} via ${selectedPaymentConfirm === 'upi' ? 'UPI' : 'Cash'}`
+                : `Yes, Received ₹${paymentFare} via ${selectedPaymentConfirm === 'upi' ? 'UPI' : 'Cash'}`
               }
             </Button>
 
