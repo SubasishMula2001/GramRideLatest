@@ -11,6 +11,18 @@ interface CashPaymentRequest {
   confirmed_by: 'user' | 'driver';
 }
 
+// Decode JWT to extract user ID
+function decodeJwt(token: string): { sub?: string } | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const payload = JSON.parse(atob(parts[1]));
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -29,30 +41,25 @@ Deno.serve(async (req) => {
 
     const token = authHeader.replace('Bearer ', '');
     
-    // Use service role to verify the token and get user
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    );
-
-    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
-    
-    if (userError || !user) {
-      console.error('Auth error:', userError);
+    // Decode token to get user ID
+    const payload = decodeJwt(token);
+    if (!payload?.sub) {
+      console.error('Invalid token payload');
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const userId = user.id;
+    const userId = payload.sub;
+    console.log('Authenticated user:', userId);
     
-    // Create a client for database operations with user context
-    const supabase = createClient(
+    // Create admin client for database operations
+    const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_ANON_KEY')!,
-      { global: { headers: { Authorization: authHeader } } }
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
+
     const { ride_id, amount, confirmed_by }: CashPaymentRequest = await req.json();
 
     // Validate input
@@ -64,7 +71,7 @@ Deno.serve(async (req) => {
     }
 
     // Verify the ride
-    const { data: ride, error: rideError } = await supabase
+    const { data: ride, error: rideError } = await supabaseAdmin
       .from('rides')
       .select('id, user_id, driver_id, fare, status')
       .eq('id', ride_id)
@@ -82,7 +89,7 @@ Deno.serve(async (req) => {
     const isRideOwner = ride.user_id === userId;
     
     // Check if user is the driver
-    const { data: driver } = await supabase
+    const { data: driver } = await supabaseAdmin
       .from('drivers')
       .select('id')
       .eq('user_id', userId)
@@ -100,7 +107,7 @@ Deno.serve(async (req) => {
     console.log('Processing cash payment for ride:', ride_id);
 
     // Create payment record
-    const { data: payment, error: paymentError } = await supabase
+    const { data: payment, error: paymentError } = await supabaseAdmin
       .from('payments')
       .insert({
         ride_id: ride_id,
@@ -124,7 +131,7 @@ Deno.serve(async (req) => {
     }
 
     // Update ride payment status
-    const { error: updateRideError } = await supabase
+    const { error: updateRideError } = await supabaseAdmin
       .from('rides')
       .update({
         payment_status: 'completed',
