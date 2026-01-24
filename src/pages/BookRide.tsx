@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Users, Package, IndianRupee, Clock, MapPin, Navigation, Loader2, CheckCircle, Car, Phone, User, Star, Locate, KeyRound, Calendar, CreditCard } from 'lucide-react';
+import { ArrowLeft, Users, Package, IndianRupee, Clock, MapPin, Navigation, Loader2, CheckCircle, Car, Phone, User, Star, Locate, KeyRound, Calendar, CreditCard, Smartphone, Banknote } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import GramRideLogo from '@/components/GramRideLogo';
@@ -29,6 +29,7 @@ const cleanPlusCode = (address: string): string => {
 
 type BookingType = 'passenger' | 'goods' | null;
 type BookingStep = 'type' | 'location' | 'confirm' | 'searching' | 'booked' | 'in_progress' | 'completed';
+type PaymentMethod = 'upi' | 'cash';
 
 interface DriverInfo {
   id: string;
@@ -67,6 +68,7 @@ const BookRide = () => {
   const [paymentCompleted, setPaymentCompleted] = useState(false);
   const [scheduledFor, setScheduledFor] = useState<Date | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod>('cash');
   
   // Route calculated values
   const [estimatedDistance, setEstimatedDistance] = useState(3.5);
@@ -142,8 +144,8 @@ const BookRide = () => {
           } else if (updatedRide.status === 'completed') {
             setStep('completed');
             toast.success('Ride completed!');
-            // Show payment modal first
-            setTimeout(() => setShowPaymentModal(true), 500);
+            // Show rating modal directly since payment is handled by driver
+            setTimeout(() => setShowRatingModal(true), 500);
           } else if (updatedRide.status === 'cancelled') {
             setStep('type');
             setRideId(null);
@@ -227,7 +229,9 @@ const BookRide = () => {
           distance_km: estimatedDistance,
           duration_mins: estimatedTime,
           status: 'pending',
-          otp: otp
+          otp: otp,
+          payment_method: selectedPaymentMethod,
+          payment_status: 'pending'
         })
         .select()
         .single();
@@ -441,8 +445,52 @@ const BookRide = () => {
                       <IndianRupee className="w-5 h-5" />
                       {estimatedFare}
                     </span>
+                </div>
+
+                {/* Payment Method Selection */}
+                <div className="mt-6">
+                  <h3 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
+                    <CreditCard className="w-4 h-4" />
+                    Payment Method
+                  </h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPaymentMethod('upi')}
+                      className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 ${
+                        selectedPaymentMethod === 'upi'
+                          ? 'border-primary bg-primary/10'
+                          : 'border-border hover:border-primary/50 bg-muted/30'
+                      }`}
+                    >
+                      <div className={`p-2 rounded-full ${selectedPaymentMethod === 'upi' ? 'bg-primary/20' : 'bg-muted'}`}>
+                        <Smartphone className={`w-5 h-5 ${selectedPaymentMethod === 'upi' ? 'text-primary' : 'text-muted-foreground'}`} />
+                      </div>
+                      <span className={`font-medium text-sm ${selectedPaymentMethod === 'upi' ? 'text-primary' : 'text-foreground'}`}>
+                        UPI
+                      </span>
+                      <span className="text-xs text-muted-foreground">Pay online</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPaymentMethod('cash')}
+                      className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 ${
+                        selectedPaymentMethod === 'cash'
+                          ? 'border-primary bg-primary/10'
+                          : 'border-border hover:border-primary/50 bg-muted/30'
+                      }`}
+                    >
+                      <div className={`p-2 rounded-full ${selectedPaymentMethod === 'cash' ? 'bg-primary/20' : 'bg-muted'}`}>
+                        <Banknote className={`w-5 h-5 ${selectedPaymentMethod === 'cash' ? 'text-primary' : 'text-muted-foreground'}`} />
+                      </div>
+                      <span className={`font-medium text-sm ${selectedPaymentMethod === 'cash' ? 'text-primary' : 'text-foreground'}`}>
+                        Cash
+                      </span>
+                      <span className="text-xs text-muted-foreground">Pay to driver</span>
+                    </button>
                   </div>
                 </div>
+              </div>
               </div>
 
               <Button 

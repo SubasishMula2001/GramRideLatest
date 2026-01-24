@@ -19,12 +19,16 @@ import {
   Car,
   CircleDot,
   Locate,
-  KeyRound
+  KeyRound,
+  Smartphone,
+  Banknote,
+  CreditCard
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import GramRideLogo from '@/components/GramRideLogo';
 import RideCard from '@/components/RideCard';
 import SecureRouteMap from '@/components/SecureRouteMap';
@@ -73,7 +77,10 @@ interface ActiveRide {
   dropoff_lat?: number;
   dropoff_lng?: number;
   otp?: string;
+  payment_method?: 'upi' | 'cash' | null;
 }
+
+type PaymentConfirmMethod = 'upi' | 'cash';
 
 interface DriverData {
   id: string;
@@ -96,6 +103,9 @@ const DriverDashboard = () => {
   const [processingRide, setProcessingRide] = useState<string | null>(null);
   const [otpInput, setOtpInput] = useState('');
   const [otpError, setOtpError] = useState(false);
+  const [showPaymentConfirmModal, setShowPaymentConfirmModal] = useState(false);
+  const [selectedPaymentConfirm, setSelectedPaymentConfirm] = useState<PaymentConfirmMethod>('cash');
+  const [processingPayment, setProcessingPayment] = useState(false);
 
   // Track driver location during active rides
   useDriverLocationTracking({
@@ -226,7 +236,8 @@ const DriverDashboard = () => {
           pickup_lng,
           dropoff_lat,
           dropoff_lng,
-          otp
+          otp,
+          payment_method
         `)
         .eq('driver_id', driverData.id)
         .in('status', ['accepted', 'in_progress'])
@@ -267,7 +278,8 @@ const DriverDashboard = () => {
           pickup_lng: data.pickup_lng,
           dropoff_lat: data.dropoff_lat,
           dropoff_lng: data.dropoff_lng,
-          otp: data.otp || undefined
+          otp: data.otp || undefined,
+          payment_method: data.payment_method as 'upi' | 'cash' | null
         });
       } else {
         setActiveRide(null);
@@ -332,7 +344,8 @@ const DriverDashboard = () => {
           pickup_lng,
           dropoff_lat,
           dropoff_lng,
-          otp
+          otp,
+          payment_method
         `)
         .eq('id', rideId)
         .single();
@@ -389,7 +402,8 @@ const DriverDashboard = () => {
         pickup_lng: rideData.pickup_lng,
         dropoff_lat: rideData.dropoff_lat,
         dropoff_lng: rideData.dropoff_lng,
-        otp: rideData.otp || undefined
+        otp: rideData.otp || undefined,
+        payment_method: rideData.payment_method as 'upi' | 'cash' | null
       });
 
       // Update driver stats
@@ -447,15 +461,40 @@ const DriverDashboard = () => {
     }
   };
 
-  const handleFinishRide = async () => {
+  const handleFinishRide = () => {
+    if (!activeRide) return;
+    // Set the selected payment method from what user chose, or default to cash
+    setSelectedPaymentConfirm(activeRide.payment_method || 'cash');
+    setShowPaymentConfirmModal(true);
+  };
+
+  const handleConfirmPayment = async () => {
     if (!activeRide || !driverData) return;
 
+    setProcessingPayment(true);
     try {
+      // Call edge function to process payment
+      const { data, error: paymentError } = await supabase.functions.invoke('process-cash-payment', {
+        body: {
+          ride_id: activeRide.id,
+          amount: activeRide.fare,
+          confirmed_by: 'driver',
+        },
+      });
+
+      if (paymentError) {
+        console.error('Payment confirmation error:', paymentError);
+        // Continue with ride completion even if payment recording fails
+      }
+
+      // Update ride status to completed
       const { error } = await supabase
         .from('rides')
         .update({ 
           status: 'completed',
-          completed_at: new Date().toISOString()
+          completed_at: new Date().toISOString(),
+          payment_status: 'completed',
+          payment_method: selectedPaymentConfirm
         })
         .eq('id', activeRide.id);
 
@@ -467,7 +506,10 @@ const DriverDashboard = () => {
         .update({ earnings: (driverData.earnings || 0) + activeRide.fare })
         .eq('id', driverData.id);
 
-      toast.success('Ride completed! Fare collected: ₹' + activeRide.fare);
+      const paymentLabel = selectedPaymentConfirm === 'upi' ? 'UPI' : 'Cash';
+      toast.success(`Ride completed! ₹${activeRide.fare} received via ${paymentLabel}`);
+      
+      setShowPaymentConfirmModal(false);
       setActiveRide(null);
       
       // Refresh driver data
@@ -475,12 +517,19 @@ const DriverDashboard = () => {
 
       await supabase.from('activity_logs').insert({
         user_id: user?.id,
-        action: 'Ride Completed',
-        details: { ride_id: activeRide.id, driver_id: driverData.id, fare: activeRide.fare }
+        action: 'Ride Completed with Payment',
+        details: { 
+          ride_id: activeRide.id, 
+          driver_id: driverData.id, 
+          fare: activeRide.fare,
+          payment_method: selectedPaymentConfirm 
+        }
       });
     } catch (error) {
       console.error('Error finishing ride:', error);
       toast.error('Failed to complete ride');
+    } finally {
+      setProcessingPayment(false);
     }
   };
 
@@ -864,6 +913,106 @@ const DriverDashboard = () => {
 
         </div>
       </main>
+
+      {/* Payment Confirmation Modal */}
+      <Dialog open={showPaymentConfirmModal} onOpenChange={setShowPaymentConfirmModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CreditCard className="h-5 w-5 text-primary" />
+              Confirm Payment Received
+            </DialogTitle>
+            <DialogDescription>
+              Select how you received payment from {activeRide?.user_name || 'customer'}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Amount Display */}
+            <div className="text-center py-4 bg-gradient-to-r from-primary/10 to-green-500/10 rounded-lg">
+              <p className="text-sm text-muted-foreground">Total Fare</p>
+              <p className="text-3xl font-bold text-primary flex items-center justify-center">
+                <IndianRupee className="w-7 h-7" />
+                {activeRide?.fare || 0}
+              </p>
+            </div>
+
+            {/* Customer's chosen payment method indicator */}
+            {activeRide?.payment_method && (
+              <div className="bg-muted/50 rounded-lg p-3 text-center">
+                <p className="text-xs text-muted-foreground">Customer selected</p>
+                <p className="font-medium text-foreground flex items-center justify-center gap-2">
+                  {activeRide.payment_method === 'upi' ? (
+                    <>
+                      <Smartphone className="w-4 h-4 text-primary" />
+                      UPI Payment
+                    </>
+                  ) : (
+                    <>
+                      <Banknote className="w-4 h-4 text-green-600" />
+                      Cash Payment
+                    </>
+                  )}
+                </p>
+              </div>
+            )}
+
+            {/* Payment Method Selection */}
+            <div>
+              <p className="text-sm font-medium text-foreground mb-3">How did you receive payment?</p>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setSelectedPaymentConfirm('upi')}
+                  className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 ${
+                    selectedPaymentConfirm === 'upi'
+                      ? 'border-primary bg-primary/10'
+                      : 'border-border hover:border-primary/50 bg-muted/30'
+                  }`}
+                >
+                  <div className={`p-2 rounded-full ${selectedPaymentConfirm === 'upi' ? 'bg-primary/20' : 'bg-muted'}`}>
+                    <Smartphone className={`w-5 h-5 ${selectedPaymentConfirm === 'upi' ? 'text-primary' : 'text-muted-foreground'}`} />
+                  </div>
+                  <span className={`font-medium text-sm ${selectedPaymentConfirm === 'upi' ? 'text-primary' : 'text-foreground'}`}>
+                    UPI
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedPaymentConfirm('cash')}
+                  className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 ${
+                    selectedPaymentConfirm === 'cash'
+                      ? 'border-primary bg-primary/10'
+                      : 'border-border hover:border-primary/50 bg-muted/30'
+                  }`}
+                >
+                  <div className={`p-2 rounded-full ${selectedPaymentConfirm === 'cash' ? 'bg-primary/20' : 'bg-muted'}`}>
+                    <Banknote className={`w-5 h-5 ${selectedPaymentConfirm === 'cash' ? 'text-primary' : 'text-muted-foreground'}`} />
+                  </div>
+                  <span className={`font-medium text-sm ${selectedPaymentConfirm === 'cash' ? 'text-primary' : 'text-foreground'}`}>
+                    Cash
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            {/* Confirm Button */}
+            <Button
+              className="w-full"
+              size="lg"
+              onClick={handleConfirmPayment}
+              disabled={processingPayment}
+            >
+              {processingPayment ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : (
+                <CheckCircle className="w-4 h-4 mr-2" />
+              )}
+              {processingPayment ? 'Processing...' : 'Confirm & Complete Ride'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
