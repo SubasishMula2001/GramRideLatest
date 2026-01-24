@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Users, Plus, Loader2, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Users, Plus, Loader2, RefreshCw, ArrowLeftRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Navbar from '@/components/Navbar';
 import SharedRideCard from '@/components/SharedRideCard';
@@ -32,6 +32,7 @@ const SharedRides = () => {
   const [loading, setLoading] = useState(true);
   const [joiningRide, setJoiningRide] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [returnTripData, setReturnTripData] = useState<{ pickup: string; dropoff: string } | null>(null);
 
   const fetchSharedRides = async () => {
     try {
@@ -143,6 +144,17 @@ const SharedRides = () => {
     }
   };
 
+  const handleCreateReturnTrip = (pickup: string, dropoff: string) => {
+    // Swap pickup and dropoff for return trip
+    setReturnTripData({ pickup: dropoff, dropoff: pickup });
+    setShowCreateModal(true);
+  };
+
+  const handleCloseModal = () => {
+    setShowCreateModal(false);
+    setReturnTripData(null);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-hero">
       <Navbar />
@@ -209,21 +221,34 @@ const SharedRides = () => {
           ) : (
             <div className="space-y-4">
               {rides.map((ride) => (
-                <SharedRideCard
-                  key={ride.id}
-                  id={ride.id}
-                  routeName={ride.route_name}
-                  pickup={ride.pickup_location}
-                  dropoff={ride.dropoff_location}
-                  departureTime={ride.departure_time}
-                  farePerPerson={ride.fare_per_person}
-                  currentPassengers={ride.current_passengers}
-                  maxPassengers={ride.max_passengers}
-                  status={ride.status}
-                  isJoined={ride.is_joined}
-                  isLoading={joiningRide === ride.id}
-                  onJoin={() => handleJoinRide(ride.id)}
-                />
+                <div key={ride.id} className="relative">
+                  <SharedRideCard
+                    id={ride.id}
+                    routeName={ride.route_name}
+                    pickup={ride.pickup_location}
+                    dropoff={ride.dropoff_location}
+                    departureTime={ride.departure_time}
+                    farePerPerson={ride.fare_per_person}
+                    currentPassengers={ride.current_passengers}
+                    maxPassengers={ride.max_passengers}
+                    status={ride.status}
+                    isJoined={ride.is_joined}
+                    isLoading={joiningRide === ride.id}
+                    onJoin={() => handleJoinRide(ride.id)}
+                  />
+                  {/* Return Trip Button - show only for joined rides */}
+                  {ride.is_joined && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="absolute top-2 right-2 gap-1"
+                      onClick={() => handleCreateReturnTrip(ride.pickup_location, ride.dropoff_location)}
+                    >
+                      <ArrowLeftRight className="w-3 h-3" />
+                      {isBengali ? 'ফেরা' : 'Return'}
+                    </Button>
+                  )}
+                </div>
               ))}
             </div>
           )}
@@ -233,8 +258,11 @@ const SharedRides = () => {
       {/* Create Modal */}
       <CreateSharedRideModal
         isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
+        onClose={handleCloseModal}
         onCreated={fetchSharedRides}
+        prefillPickup={returnTripData?.pickup || ''}
+        prefillDropoff={returnTripData?.dropoff || ''}
+        isReturnTrip={!!returnTripData}
       />
     </div>
   );
