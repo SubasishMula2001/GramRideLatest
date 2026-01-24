@@ -55,11 +55,21 @@ export const useMapsProxy = () => {
 
   const getAutocomplete = useCallback(async (input: string, sessionToken?: string): Promise<AutocompleteResult[]> => {
     try {
-      // Check if user is authenticated first
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) {
-        // Silent return - don't log warning for expected unauthenticated state
+      // Try to get fresh session - this ensures token is valid and refreshed if needed
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        console.error('Session error:', sessionError);
         return [];
+      }
+      
+      if (!session?.access_token) {
+        // Try refreshing the session
+        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+        if (refreshError || !refreshData.session?.access_token) {
+          // Silent return - don't log warning for expected unauthenticated state
+          return [];
+        }
       }
 
       const { data, error } = await supabase.functions.invoke('maps-autocomplete', {
@@ -67,20 +77,14 @@ export const useMapsProxy = () => {
       });
 
       if (error) {
-        // Only log non-auth errors (401/403 are expected for expired sessions)
-        if (!error.message?.includes('401') && !error.message?.includes('non-2xx')) {
-          console.error('Autocomplete error:', error);
-        }
+        // Log all errors for debugging
+        console.error('Autocomplete error:', error);
         return [];
       }
 
       return data?.predictions || [];
     } catch (err) {
-      // Suppress auth-related errors
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      if (!errorMsg.includes('401') && !errorMsg.includes('non-2xx')) {
-        console.error('Autocomplete failed:', err);
-      }
+      console.error('Autocomplete failed:', err);
       return [];
     }
   }, []);
