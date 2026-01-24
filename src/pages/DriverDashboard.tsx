@@ -1010,49 +1010,23 @@ const DriverDashboard = () => {
                 </Button>
               </div>
             ) : (
-              <>
-                {/* UPI or unspecified payment - let driver select */}
-                <div>
-                  <p className="text-sm font-medium text-foreground mb-3">How did you receive payment?</p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedPaymentConfirm('upi')}
-                      className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 ${
-                        selectedPaymentConfirm === 'upi'
-                          ? 'border-primary bg-primary/10'
-                          : 'border-border hover:border-primary/50 bg-muted/30'
-                      }`}
-                    >
-                      <div className={`p-2 rounded-full ${selectedPaymentConfirm === 'upi' ? 'bg-primary/20' : 'bg-muted'}`}>
-                        <Smartphone className={`w-5 h-5 ${selectedPaymentConfirm === 'upi' ? 'text-primary' : 'text-muted-foreground'}`} />
-                      </div>
-                      <span className={`font-medium text-sm ${selectedPaymentConfirm === 'upi' ? 'text-primary' : 'text-foreground'}`}>
-                        UPI
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedPaymentConfirm('cash')}
-                      className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 ${
-                        selectedPaymentConfirm === 'cash'
-                          ? 'border-primary bg-primary/10'
-                          : 'border-border hover:border-primary/50 bg-muted/30'
-                      }`}
-                    >
-                      <div className={`p-2 rounded-full ${selectedPaymentConfirm === 'cash' ? 'bg-primary/20' : 'bg-muted'}`}>
-                        <Banknote className={`w-5 h-5 ${selectedPaymentConfirm === 'cash' ? 'text-primary' : 'text-muted-foreground'}`} />
-                      </div>
-                      <span className={`font-medium text-sm ${selectedPaymentConfirm === 'cash' ? 'text-primary' : 'text-foreground'}`}>
-                        Cash
-                      </span>
-                    </button>
+              <div className="space-y-3">
+                {/* UPI Payment - Same Yes/No options */}
+                <div className="flex items-center gap-3 p-3 bg-primary/10 rounded-lg">
+                  <div className="p-2 bg-primary/20 rounded-full">
+                    <Smartphone className="w-5 h-5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-foreground">UPI Payment</p>
+                    <p className="text-sm text-muted-foreground">
+                      Customer selected UPI - ₹{activeRide?.fare || 0}
+                    </p>
                   </div>
                 </div>
 
-                {/* Confirm Button */}
+                {/* Yes, Payment Received Button */}
                 <Button
-                  className="w-full"
+                  className="w-full bg-green-600 hover:bg-green-700"
                   size="lg"
                   onClick={() => handleConfirmPayment(true)}
                   disabled={processingPayment}
@@ -1062,7 +1036,7 @@ const DriverDashboard = () => {
                   ) : (
                     <CheckCircle className="w-4 h-4 mr-2" />
                   )}
-                  {processingPayment ? 'Processing...' : 'Confirm & Complete Ride'}
+                  {processingPayment ? 'Processing...' : 'Yes, Payment Received ₹' + (activeRide?.fare || 0)}
                 </Button>
 
                 {/* Not Paid Button */}
@@ -1076,7 +1050,7 @@ const DriverDashboard = () => {
                   <XCircle className="w-4 h-4 mr-2" />
                   Not Paid - Complete Anyway
                 </Button>
-              </>
+              </div>
             )}
           </div>
         </DialogContent>
