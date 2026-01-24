@@ -2,6 +2,21 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.2";
 import { getCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.ts";
 
+// Helper to clean Plus Codes from addresses (e.g., "53XP+ABC, Location" -> "Location")
+function cleanPlusCode(address: string): string {
+  return address
+    // Remove Plus Codes at the start: "53XP+ABC, " or "53XP+ABC "
+    .replace(/^[A-Z0-9]{4}\+[A-Z0-9]{2,4},?\s*/i, '')
+    // Remove Plus Codes in the middle: ", 53XP+ABC," 
+    .replace(/,?\s*[A-Z0-9]{4}\+[A-Z0-9]{2,4}\s*,?/gi, ',')
+    // Clean up double commas
+    .replace(/,\s*,/g, ',')
+    // Clean up leading/trailing commas and spaces
+    .replace(/^,\s*/, '')
+    .replace(/,\s*$/, '')
+    .trim();
+}
+
 // Verify user authentication
 async function verifyAuth(req: Request, corsHeaders: Record<string, string>): Promise<{ userId: string } | Response> {
   const authHeader = req.headers.get("Authorization");
@@ -92,9 +107,12 @@ serve(async (req) => {
 
     if (data.status === "OK" && data.result) {
       const result = data.result;
+      // Clean Plus Codes from the address before returning
+      const cleanedAddress = cleanPlusCode(result.formatted_address || '');
+      
       return new Response(
         JSON.stringify({
-          address: result.formatted_address,
+          address: cleanedAddress,
           name: result.name,
           lat: result.geometry?.location?.lat,
           lng: result.geometry?.location?.lng,
