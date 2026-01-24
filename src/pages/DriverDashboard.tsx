@@ -464,8 +464,8 @@ const DriverDashboard = () => {
 
   const handleFinishRide = () => {
     if (!activeRide) return;
-    // Set the selected payment method from what user chose, or default to cash
-    setSelectedPaymentConfirm(activeRide.payment_method || 'cash');
+    // Default to cash - driver will select actual payment method
+    setSelectedPaymentConfirm('cash');
     setShowPaymentConfirmModal(true);
   };
 
@@ -928,130 +928,92 @@ const DriverDashboard = () => {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              {activeRide?.payment_method === 'cash' ? (
-                <>
-                  <Banknote className="h-5 w-5 text-green-600" />
-                  Confirm Cash Received
-                </>
-              ) : (
-                <>
-                  <CreditCard className="h-5 w-5 text-primary" />
-                  Confirm Payment Received
-                </>
-              )}
+              <CreditCard className="h-5 w-5 text-primary" />
+              Confirm Payment
             </DialogTitle>
             <DialogDescription>
-              {activeRide?.payment_method === 'cash' 
-                ? `Please confirm you have received ₹${activeRide?.fare || 0} cash from the customer before completing the ride.`
-                : `Confirm how you received payment from ${activeRide?.user_name || 'customer'}`
-              }
+              Select how you received payment and confirm to complete the ride
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
             {/* Amount Display */}
-            <div className={`text-center py-4 rounded-lg ${
-              activeRide?.payment_method === 'cash' 
-                ? 'bg-gradient-to-r from-green-500/10 to-green-600/10 border border-green-500/20'
-                : 'bg-gradient-to-r from-primary/10 to-green-500/10'
-            }`}>
-              <p className="text-sm text-muted-foreground">
-                {activeRide?.payment_method === 'cash' ? 'Cash Amount to Collect' : 'Total Fare'}
-              </p>
-              <p className={`text-3xl font-bold flex items-center justify-center ${
-                activeRide?.payment_method === 'cash' ? 'text-green-600' : 'text-primary'
-              }`}>
+            <div className="text-center py-4 rounded-lg bg-gradient-to-r from-primary/10 to-green-500/10">
+              <p className="text-sm text-muted-foreground">Total Fare</p>
+              <p className="text-3xl font-bold text-primary flex items-center justify-center">
                 <IndianRupee className="w-7 h-7" />
                 {activeRide?.fare || 0}
               </p>
             </div>
 
-            {/* Cash Payment Confirmation */}
-            {activeRide?.payment_method === 'cash' ? (
-              <div className="space-y-4">
-                {/* Cash confirmation notice */}
-                <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4">
-                  <div className="flex items-start gap-3">
-                    <Banknote className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="font-medium text-amber-700 dark:text-amber-500">Cash Payment</p>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Customer has selected cash payment. Please collect ₹{activeRide?.fare || 0} before confirming.
-                      </p>
-                    </div>
+            {/* Payment Method Selection */}
+            <div>
+              <p className="text-sm font-medium text-foreground mb-3">How did you receive payment?</p>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setSelectedPaymentConfirm('cash')}
+                  className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 ${
+                    selectedPaymentConfirm === 'cash'
+                      ? 'border-primary bg-primary/10'
+                      : 'border-border hover:border-primary/50 bg-muted/30'
+                  }`}
+                >
+                  <div className={`p-2 rounded-full ${selectedPaymentConfirm === 'cash' ? 'bg-primary/20' : 'bg-muted'}`}>
+                    <Banknote className={`w-5 h-5 ${selectedPaymentConfirm === 'cash' ? 'text-primary' : 'text-muted-foreground'}`} />
                   </div>
-                </div>
-
-                {/* Confirm Cash Received Button */}
-                <Button
-                  className="w-full bg-green-600 hover:bg-green-700"
-                  size="lg"
-                  onClick={() => handleConfirmPayment(true)}
-                  disabled={processingPayment}
+                  <span className={`font-medium text-sm ${selectedPaymentConfirm === 'cash' ? 'text-primary' : 'text-foreground'}`}>
+                    Cash
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedPaymentConfirm('upi')}
+                  className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 ${
+                    selectedPaymentConfirm === 'upi'
+                      ? 'border-primary bg-primary/10'
+                      : 'border-border hover:border-primary/50 bg-muted/30'
+                  }`}
                 >
-                  {processingPayment ? (
-                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                  ) : (
-                    <CheckCircle className="w-4 h-4 mr-2" />
-                  )}
-                  {processingPayment ? 'Processing...' : 'Yes, I Received Cash ₹' + (activeRide?.fare || 0)}
-                </Button>
-
-                {/* Not Paid Button */}
-                <Button
-                  variant="outline"
-                  className="w-full border-destructive/50 text-destructive hover:bg-destructive/10"
-                  size="lg"
-                  onClick={() => handleConfirmPayment(false)}
-                  disabled={processingPayment}
-                >
-                  <XCircle className="w-4 h-4 mr-2" />
-                  Not Paid - Complete Anyway
-                </Button>
+                  <div className={`p-2 rounded-full ${selectedPaymentConfirm === 'upi' ? 'bg-primary/20' : 'bg-muted'}`}>
+                    <Smartphone className={`w-5 h-5 ${selectedPaymentConfirm === 'upi' ? 'text-primary' : 'text-muted-foreground'}`} />
+                  </div>
+                  <span className={`font-medium text-sm ${selectedPaymentConfirm === 'upi' ? 'text-primary' : 'text-foreground'}`}>
+                    UPI
+                  </span>
+                </button>
               </div>
-            ) : (
-              <div className="space-y-3">
-                {/* UPI Payment - Same Yes/No options */}
-                <div className="flex items-center gap-3 p-3 bg-primary/10 rounded-lg">
-                  <div className="p-2 bg-primary/20 rounded-full">
-                    <Smartphone className="w-5 h-5 text-primary" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-foreground">UPI Payment</p>
-                    <p className="text-sm text-muted-foreground">
-                      Customer selected UPI - ₹{activeRide?.fare || 0}
-                    </p>
-                  </div>
-                </div>
+            </div>
 
-                {/* Yes, Payment Received Button */}
-                <Button
-                  className="w-full bg-green-600 hover:bg-green-700"
-                  size="lg"
-                  onClick={() => handleConfirmPayment(true)}
-                  disabled={processingPayment}
-                >
-                  {processingPayment ? (
-                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                  ) : (
-                    <CheckCircle className="w-4 h-4 mr-2" />
-                  )}
-                  {processingPayment ? 'Processing...' : 'Yes, Payment Received ₹' + (activeRide?.fare || 0)}
-                </Button>
+            {/* Confirm Payment Button */}
+            <Button
+              className="w-full bg-green-600 hover:bg-green-700"
+              size="lg"
+              onClick={() => handleConfirmPayment(true)}
+              disabled={processingPayment}
+            >
+              {processingPayment ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : (
+                <CheckCircle className="w-4 h-4 mr-2" />
+              )}
+              {processingPayment 
+                ? 'Processing...' 
+                : `Yes, Received ₹${activeRide?.fare || 0} via ${selectedPaymentConfirm === 'upi' ? 'UPI' : 'Cash'}`
+              }
+            </Button>
 
-                {/* Not Paid Button */}
-                <Button
-                  variant="outline"
-                  className="w-full border-destructive/50 text-destructive hover:bg-destructive/10"
-                  size="lg"
-                  onClick={() => handleConfirmPayment(false)}
-                  disabled={processingPayment}
-                >
-                  <XCircle className="w-4 h-4 mr-2" />
-                  Not Paid - Complete Anyway
-                </Button>
-              </div>
-            )}
+            {/* Not Paid Button */}
+            <Button
+              variant="outline"
+              className="w-full border-destructive/50 text-destructive hover:bg-destructive/10"
+              size="lg"
+              onClick={() => handleConfirmPayment(false)}
+              disabled={processingPayment}
+            >
+              <XCircle className="w-4 h-4 mr-2" />
+              Not Paid - Complete Anyway
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
