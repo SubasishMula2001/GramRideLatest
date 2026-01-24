@@ -81,6 +81,15 @@ interface ActiveRide {
   payment_method?: 'upi' | 'cash' | null;
 }
 
+interface PendingPaymentRide {
+  id: string;
+  fare: number;
+  pickup_location: string;
+  dropoff_location: string;
+  completed_at: string;
+  user_name: string | null;
+}
+
 type PaymentConfirmMethod = 'upi' | 'cash';
 
 type PaymentContext = {
@@ -105,6 +114,7 @@ const DriverDashboard = () => {
   const [isOnline, setIsOnline] = useState(false);
   const [pendingRides, setPendingRides] = useState<PendingRide[]>([]);
   const [activeRide, setActiveRide] = useState<ActiveRide | null>(null);
+  const [pendingPaymentRides, setPendingPaymentRides] = useState<PendingPaymentRide[]>([]);
   const [driverData, setDriverData] = useState<DriverData | null>(null);
   const [loading, setLoading] = useState(true);
   const [processingRide, setProcessingRide] = useState<string | null>(null);
@@ -133,6 +143,13 @@ const DriverDashboard = () => {
       fetchActiveRide();
     }
   }, [user, authLoading]);
+
+  // Fetch pending payment rides when driverData is available
+  useEffect(() => {
+    if (driverData) {
+      fetchPendingPaymentRides();
+    }
+  }, [driverData]);
 
   // Subscribe to pending rides when online
   useEffect(() => {
@@ -294,6 +311,62 @@ const DriverDashboard = () => {
       }
     } catch (error) {
       console.error('Error fetching active ride:', error);
+    }
+  };
+
+  const fetchPendingPaymentRides = async () => {
+    if (!driverData) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('rides')
+        .select(`
+          id,
+          fare,
+          pickup_location,
+          dropoff_location,
+          completed_at,
+          user_id
+        `)
+        .eq('driver_id', driverData.id)
+        .eq('status', 'completed')
+        .eq('payment_status', 'pending')
+        .order('completed_at', { ascending: false })
+        .limit(10);
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        // Fetch user names for each ride
+        const ridesWithNames: PendingPaymentRide[] = await Promise.all(
+          data.map(async (ride) => {
+            let userName = 'Customer';
+            if (ride.user_id) {
+              const { data: profileData } = await supabase
+                .from('profiles')
+                .select('full_name')
+                .eq('id', ride.user_id)
+                .maybeSingle();
+              if (profileData?.full_name) {
+                userName = profileData.full_name;
+              }
+            }
+            return {
+              id: ride.id,
+              fare: ride.fare || 0,
+              pickup_location: ride.pickup_location,
+              dropoff_location: ride.dropoff_location,
+              completed_at: ride.completed_at || '',
+              user_name: userName,
+            };
+          })
+        );
+        setPendingPaymentRides(ridesWithNames);
+      } else {
+        setPendingPaymentRides([]);
+      }
+    } catch (error) {
+      console.error('Error fetching pending payment rides:', error);
     }
   };
 
@@ -555,6 +628,74 @@ const DriverDashboard = () => {
     } catch (error) {
       console.error('Error finishing ride:', error);
       toast.error('Failed to complete ride');
+    } finally {
+      setProcessingPayment(false);
+    }
+  };
+
+  const handleAcceptPendingPayment = (ride: PendingPaymentRide) => {
+    setPaymentContext({
+      rideId: ride.id,
+      fare: ride.fare,
+      existingPaymentMethod: null,
+    });
+    setSelectedPaymentConfirm('cash');
+    setShowPaymentConfirmModal(true);
+  };
+
+  const handleConfirmPendingPayment = async () => {
+    if (!driverData || !paymentContext) return;
+
+    setProcessingPayment(true);
+    try {
+      // Use cash payment function if cash selected
+      if (selectedPaymentConfirm === 'cash') {
+        await supabase.functions.invoke('process-cash-payment', {
+          body: {
+            ride_id: paymentContext.rideId,
+            amount: paymentContext.fare,
+            confirmed_by: 'driver',
+          },
+        });
+      }
+
+      // Update ride payment status to completed
+      const { error } = await supabase
+        .from('rides')
+        .update({ 
+          payment_status: 'completed',
+          payment_method: selectedPaymentConfirm
+        })
+        .eq('id', paymentContext.rideId);
+
+      if (error) throw error;
+
+      // Update earnings
+      await supabase
+        .from('drivers')
+        .update({ earnings: (driverData.earnings || 0) + paymentContext.fare })
+        .eq('id', driverData.id);
+
+      toast.success(`Payment received! ₹${paymentContext.fare} via ${selectedPaymentConfirm === 'upi' ? 'UPI' : 'Cash'}`);
+      
+      setShowPaymentConfirmModal(false);
+      setPaymentContext(null);
+      setPendingPaymentRides(prev => prev.filter(r => r.id !== paymentContext.rideId));
+      fetchDriverData();
+
+      await supabase.from('activity_logs').insert({
+        user_id: user?.id,
+        action: 'Pending Payment Collected',
+        details: { 
+          ride_id: paymentContext.rideId, 
+          driver_id: driverData.id, 
+          fare: paymentContext.fare,
+          payment_method: selectedPaymentConfirm
+        }
+      });
+    } catch (error) {
+      console.error('Error collecting payment:', error);
+      toast.error('Failed to process payment');
     } finally {
       setProcessingPayment(false);
     }
@@ -904,6 +1045,50 @@ const DriverDashboard = () => {
             </div>
           )}
 
+          {/* Pending Payments Section */}
+          {pendingPaymentRides.length > 0 && (
+            <div className="bg-gradient-card rounded-2xl border-2 border-secondary/50 p-5 shadow-card mb-6">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="p-2 rounded-full bg-secondary/20">
+                  <IndianRupee className="w-5 h-5 text-secondary" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-foreground">Pending Payments</h3>
+                  <p className="text-xs text-muted-foreground">Collect payment from completed rides</p>
+                </div>
+              </div>
+              
+              <div className="space-y-3">
+                {pendingPaymentRides.map((ride) => (
+                  <div 
+                    key={ride.id}
+                    className="flex items-center justify-between p-3 rounded-xl bg-muted/50 border border-border/50"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-foreground truncate">{ride.user_name}</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {cleanPlusCode(ride.pickup_location)} → {cleanPlusCode(ride.dropoff_location)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 ml-3">
+                      <span className="font-bold text-primary flex items-center">
+                        <IndianRupee className="w-4 h-4" />
+                        {ride.fare}
+                      </span>
+                      <Button 
+                        size="sm" 
+                        className="bg-green-600 hover:bg-green-700"
+                        onClick={() => handleAcceptPendingPayment(ride)}
+                      >
+                        Accept
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Today's Stats */}
           <div className="bg-gradient-card rounded-2xl border border-border/50 p-6 shadow-card mb-6">
             <h3 className="text-lg font-bold text-foreground mb-4">Your Stats</h3>
@@ -1015,7 +1200,14 @@ const DriverDashboard = () => {
             <Button
               className="w-full bg-green-600 hover:bg-green-700"
               size="lg"
-              onClick={() => handleConfirmPayment(true)}
+              onClick={() => {
+                // If no active ride, this is a pending payment collection
+                if (!activeRide) {
+                  handleConfirmPendingPayment();
+                } else {
+                  handleConfirmPayment(true);
+                }
+              }}
               disabled={processingPayment}
             >
               {processingPayment ? (
@@ -1029,17 +1221,19 @@ const DriverDashboard = () => {
               }
             </Button>
 
-            {/* Not Paid Button */}
-            <Button
-              variant="outline"
-              className="w-full border-destructive/50 text-destructive hover:bg-destructive/10"
-              size="lg"
-              onClick={() => handleConfirmPayment(false)}
-              disabled={processingPayment}
-            >
-              <XCircle className="w-4 h-4 mr-2" />
-              Not Paid - Complete Anyway
-            </Button>
+            {/* Not Paid Button - Only show when ending active ride */}
+            {activeRide && (
+              <Button
+                variant="outline"
+                className="w-full border-destructive/50 text-destructive hover:bg-destructive/10"
+                size="lg"
+                onClick={() => handleConfirmPayment(false)}
+                disabled={processingPayment}
+              >
+                <XCircle className="w-4 h-4 mr-2" />
+                Not Paid - Complete Anyway
+              </Button>
+            )}
           </div>
         </DialogContent>
       </Dialog>
