@@ -392,6 +392,113 @@ export type Database = {
           },
         ]
       }
+      shared_ride_passengers: {
+        Row: {
+          id: string
+          joined_at: string
+          payment_status: string
+          seats_booked: number
+          shared_ride_id: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          joined_at?: string
+          payment_status?: string
+          seats_booked?: number
+          shared_ride_id: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          joined_at?: string
+          payment_status?: string
+          seats_booked?: number
+          shared_ride_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shared_ride_passengers_shared_ride_id_fkey"
+            columns: ["shared_ride_id"]
+            isOneToOne: false
+            referencedRelation: "shared_rides"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shared_rides: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          departure_time: string
+          driver_id: string | null
+          dropoff_lat: number | null
+          dropoff_lng: number | null
+          dropoff_location: string
+          fare_per_person: number
+          id: string
+          max_passengers: number
+          pickup_lat: number | null
+          pickup_lng: number | null
+          pickup_location: string
+          route_name: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          departure_time: string
+          driver_id?: string | null
+          dropoff_lat?: number | null
+          dropoff_lng?: number | null
+          dropoff_location: string
+          fare_per_person: number
+          id?: string
+          max_passengers?: number
+          pickup_lat?: number | null
+          pickup_lng?: number | null
+          pickup_location: string
+          route_name: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          departure_time?: string
+          driver_id?: string | null
+          dropoff_lat?: number | null
+          dropoff_lng?: number | null
+          dropoff_location?: string
+          fare_per_person?: number
+          id?: string
+          max_passengers?: number
+          pickup_lat?: number | null
+          pickup_lng?: number | null
+          pickup_location?: string
+          route_name?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shared_rides_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "available_drivers_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shared_rides_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           id: string
@@ -447,6 +554,10 @@ export type Database = {
       }
       generate_referral_code: { Args: never; Returns: string }
       get_current_driver_id: { Args: never; Returns: string }
+      get_shared_ride_passenger_count: {
+        Args: { ride_id: string }
+        Returns: number
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
