@@ -315,6 +315,20 @@ const BookRide = () => {
                   onClick={() => handleTypeSelect('goods')}
                   variant="goods"
                 />
+                
+                {/* Shared Rides Link */}
+                <Link to="/shared-rides" className="block">
+                  <div className="p-4 rounded-xl border-2 border-dashed border-primary/30 bg-primary/5 hover:bg-primary/10 hover:border-primary/50 transition-all flex items-center gap-3">
+                    <div className="p-3 rounded-full bg-primary/10">
+                      <Users className="w-5 h-5 text-primary" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-foreground">Shared Rides</p>
+                      <p className="text-xs text-muted-foreground">Travel together, share the fare</p>
+                    </div>
+                    <div className="text-primary font-medium text-sm">→</div>
+                  </div>
+                </Link>
               </div>
             </div>
           )}

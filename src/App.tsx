@@ -9,6 +9,7 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import Navbar from "@/components/Navbar";
 import Index from "./pages/Index";
 import BookRide from "./pages/BookRide";
+import SharedRides from "./pages/SharedRides";
 import DriverDashboard from "./pages/DriverDashboard";
 import DriverProfile from "./pages/DriverProfile";
 import DriverAnalytics from "./pages/driver/DriverAnalytics";
@@ -47,6 +48,11 @@ const App = () => (
             <Route path="/profile" element={
               <ProtectedRoute allowedRoles={['user']}>
                 <UserProfile />
+              </ProtectedRoute>
+            } />
+            <Route path="/shared-rides" element={
+              <ProtectedRoute allowedRoles={['user']}>
+                <SharedRides />
               </ProtectedRoute>
             } />
             
