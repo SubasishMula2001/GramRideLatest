@@ -588,7 +588,7 @@ const BookRide = () => {
                           <p className="font-semibold text-foreground">{driverInfo.vehicle_number}</p>
                         </div>
                       </div>
-                      {driverInfo.phone && (
+                      {driverInfo.phone ? (
                         <a 
                           href={`tel:${driverInfo.phone}`}
                           className="flex items-center gap-3 p-3 bg-green-500/10 hover:bg-green-500/20 rounded-xl transition-colors"
@@ -602,6 +602,16 @@ const BookRide = () => {
                           </div>
                           <span className="text-green-600 font-medium">Call →</span>
                         </a>
+                      ) : (
+                        <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-xl">
+                          <div className="p-2 rounded-lg bg-muted">
+                            <Phone className="w-5 h-5 text-muted-foreground" />
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-xs text-muted-foreground uppercase">Phone</p>
+                            <p className="text-sm text-muted-foreground">Not available</p>
+                          </div>
+                        </div>
                       )}
                     </div>
 
@@ -761,13 +771,21 @@ const BookRide = () => {
                             {driverInfo.vehicle_number && ` • ${driverInfo.vehicle_number}`}
                           </p>
                         </div>
-                        {driverInfo.phone && (
+                        {driverInfo.phone ? (
                           <a 
                             href={`tel:${driverInfo.phone}`}
                             className="p-3 bg-green-500 hover:bg-green-600 rounded-full transition-colors shadow-lg"
+                            title="Call Driver"
                           >
                             <Phone className="w-5 h-5 text-white" />
                           </a>
+                        ) : (
+                          <div 
+                            className="p-3 bg-muted rounded-full"
+                            title="Phone not available"
+                          >
+                            <Phone className="w-5 h-5 text-muted-foreground" />
+                          </div>
                         )}
                       </div>
 
