@@ -404,7 +404,7 @@ const BookRide = () => {
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground font-medium uppercase">Pickup</p>
-                      <p className="text-foreground font-medium">{pickupData.address}</p>
+                      <p className="text-foreground font-medium">{cleanPlusCode(pickupData.address)}</p>
                     </div>
                   </div>
                   
@@ -414,7 +414,7 @@ const BookRide = () => {
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground font-medium uppercase">Drop</p>
-                      <p className="text-foreground font-medium">{dropData.address}</p>
+                      <p className="text-foreground font-medium">{cleanPlusCode(dropData.address)}</p>
                     </div>
                   </div>
                 </div>
@@ -478,11 +478,11 @@ const BookRide = () => {
               <div className="bg-gradient-card rounded-2xl border border-border/50 p-6 text-left">
                 <div className="flex items-center gap-3 mb-4">
                   <Navigation className="w-5 h-5 text-primary" />
-                  <span className="text-foreground">{pickupData.address}</span>
+                  <span className="text-foreground">{cleanPlusCode(pickupData.address)}</span>
                 </div>
                 <div className="flex items-center gap-3">
                   <MapPin className="w-5 h-5 text-secondary" />
-                  <span className="text-foreground">{dropData.address}</span>
+                  <span className="text-foreground">{cleanPlusCode(dropData.address)}</span>
                 </div>
               </div>
             </div>
@@ -786,11 +786,11 @@ const BookRide = () => {
                 )}
                 <div className="flex items-center gap-3 mb-4">
                   <Navigation className="w-5 h-5 text-primary" />
-                  <span className="text-foreground">{pickupData.address}</span>
+                  <span className="text-foreground">{cleanPlusCode(pickupData.address)}</span>
                 </div>
                 <div className="flex items-center gap-3 mb-4">
                   <MapPin className="w-5 h-5 text-secondary" />
-                  <span className="text-foreground">{dropData.address}</span>
+                  <span className="text-foreground">{cleanPlusCode(dropData.address)}</span>
                 </div>
                 <div className="border-t border-border pt-4 flex items-center justify-between">
                   <span className="text-muted-foreground">Total Fare Paid</span>
