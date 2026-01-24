@@ -2,6 +2,21 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.2";
 import { getCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.ts";
 
+// Helper to clean Plus Codes from addresses (e.g., "5MP3+XP5, Location" -> "Location")
+function cleanPlusCode(address: string): string {
+  return address
+    // Remove Plus Codes at the start: "5MP3+XP5, " or "5MP3+XP5 "
+    .replace(/^[A-Z0-9]{4}\+[A-Z0-9]{2,4},?\s*/i, '')
+    // Remove Plus Codes in the middle: ", 5MP3+XP5," 
+    .replace(/,?\s*[A-Z0-9]{4}\+[A-Z0-9]{2,4}\s*,?/gi, ',')
+    // Clean up double commas
+    .replace(/,\s*,/g, ',')
+    // Clean up leading/trailing commas and spaces
+    .replace(/^,\s*/, '')
+    .replace(/,\s*$/, '')
+    .trim();
+}
+
 // Verify user authentication
 async function verifyAuth(req: Request, corsHeaders: Record<string, string>): Promise<{ userId: string } | Response> {
   const authHeader = req.headers.get("Authorization");
@@ -98,6 +113,10 @@ serve(async (req) => {
       const route = data.routes[0];
       const leg = route.legs?.[0];
 
+      // Clean Plus Codes from addresses before returning
+      const startAddress = cleanPlusCode(leg?.start_address || '');
+      const endAddress = cleanPlusCode(leg?.end_address || '');
+
       return new Response(
         JSON.stringify({
           distance: leg?.distance?.value || 0, // meters
@@ -105,8 +124,8 @@ serve(async (req) => {
           duration: leg?.duration?.value || 0, // seconds
           durationText: leg?.duration?.text || '',
           polyline: route.overview_polyline?.points || '',
-          startAddress: leg?.start_address || '',
-          endAddress: leg?.end_address || '',
+          startAddress,
+          endAddress,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
       );
