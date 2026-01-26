@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Users, Package, IndianRupee, Clock, MapPin, Navigation, Loader2, CheckCircle, Car, Phone, User, Star, Locate, KeyRound, Calendar } from 'lucide-react';
+import { ArrowLeft, Users, Package, IndianRupee, Clock, MapPin, Navigation, Loader2, CheckCircle, Car, Phone, User, Star, Locate, KeyRound, Calendar, Smartphone, Banknote, CreditCard } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import GramRideLogo from '@/components/GramRideLogo';
@@ -68,7 +68,8 @@ const BookRide = () => {
   const [paymentCompleted, setPaymentCompleted] = useState(false);
   const [scheduledFor, setScheduledFor] = useState<Date | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  // Payment method removed - driver selects at ride completion
+  // Payment method selection - user chooses before booking
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'upi' | 'cash' | null>(null);
   
   // Route calculated values
   const [estimatedDistance, setEstimatedDistance] = useState(3.5);
@@ -235,7 +236,8 @@ const BookRide = () => {
           duration_mins: estimatedTime,
           status: 'pending',
           otp: otp,
-          payment_status: 'pending'
+          payment_status: 'pending',
+          payment_method: selectedPaymentMethod
         })
         .select()
         .single();
@@ -464,7 +466,67 @@ const BookRide = () => {
                       {estimatedFare}
                     </span>
                 </div>
+                </div>
               </div>
+
+              {/* Payment Method Selection */}
+              <div className="bg-gradient-card rounded-2xl border border-border/50 p-6 shadow-elevated mb-6">
+                <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+                  <CreditCard className="w-5 h-5 text-primary" />
+                  Select Payment Method
+                </h3>
+                <div className="grid grid-cols-2 gap-3">
+                  {/* UPI Option */}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPaymentMethod('upi')}
+                    className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${
+                      selectedPaymentMethod === 'upi'
+                        ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
+                        : 'border-border hover:border-primary/50 hover:bg-muted/50'
+                    }`}
+                  >
+                    <div className={`p-3 rounded-full mb-2 ${
+                      selectedPaymentMethod === 'upi' ? 'bg-primary/20' : 'bg-muted'
+                    }`}>
+                      <Smartphone className={`w-6 h-6 ${
+                        selectedPaymentMethod === 'upi' ? 'text-primary' : 'text-muted-foreground'
+                      }`} />
+                    </div>
+                    <span className={`font-medium ${
+                      selectedPaymentMethod === 'upi' ? 'text-primary' : 'text-foreground'
+                    }`}>UPI</span>
+                    <span className="text-xs text-muted-foreground mt-1">GPay, PhonePe</span>
+                  </button>
+
+                  {/* Cash Option */}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPaymentMethod('cash')}
+                    className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${
+                      selectedPaymentMethod === 'cash'
+                        ? 'border-green-500 bg-green-500/5 ring-2 ring-green-500/20'
+                        : 'border-border hover:border-green-500/50 hover:bg-muted/50'
+                    }`}
+                  >
+                    <div className={`p-3 rounded-full mb-2 ${
+                      selectedPaymentMethod === 'cash' ? 'bg-green-500/20' : 'bg-muted'
+                    }`}>
+                      <Banknote className={`w-6 h-6 ${
+                        selectedPaymentMethod === 'cash' ? 'text-green-600' : 'text-muted-foreground'
+                      }`} />
+                    </div>
+                    <span className={`font-medium ${
+                      selectedPaymentMethod === 'cash' ? 'text-green-600' : 'text-foreground'
+                    }`}>Cash</span>
+                    <span className="text-xs text-muted-foreground mt-1">Pay to Driver</span>
+                  </button>
+                </div>
+                {selectedPaymentMethod === 'upi' && (
+                  <p className="text-xs text-muted-foreground text-center mt-3 p-2 bg-primary/5 rounded-lg">
+                    💡 You can pay now or anytime during the ride
+                  </p>
+                )}
               </div>
 
               <Button 
@@ -472,10 +534,12 @@ const BookRide = () => {
                 size="xl" 
                 className="w-full"
                 onClick={handleConfirmBooking}
-                disabled={loading}
+                disabled={loading || !selectedPaymentMethod}
               >
                 {loading ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
+                ) : !selectedPaymentMethod ? (
+                  'Select Payment Method'
                 ) : (
                   'Confirm Booking'
                 )}
@@ -687,6 +751,25 @@ const BookRide = () => {
                   </div>
                 </div>
               )}
+
+              {/* Pay Now Button - Before Ride Starts */}
+              {selectedPaymentMethod === 'upi' && !paymentCompleted && (
+                <Button
+                  variant="hero"
+                  size="lg"
+                  className="w-full"
+                  onClick={() => setShowPaymentModal(true)}
+                >
+                  <Smartphone className="w-5 h-5 mr-2" />
+                  Pay Now with UPI
+                </Button>
+              )}
+              {paymentCompleted && (
+                <div className="flex items-center justify-center gap-2 p-4 bg-green-500/10 rounded-xl">
+                  <CheckCircle className="w-5 h-5 text-green-600" />
+                  <span className="font-medium text-green-600">Payment Completed</span>
+                </div>
+              )}
             </div>
           )}
 
@@ -807,6 +890,25 @@ const BookRide = () => {
                           {estimatedFare}
                         </span>
                       </div>
+
+                      {/* Pay Now Button During Ride */}
+                      {selectedPaymentMethod === 'upi' && !paymentCompleted && (
+                        <Button
+                          variant="hero"
+                          size="lg"
+                          className="w-full mt-4"
+                          onClick={() => setShowPaymentModal(true)}
+                        >
+                          <Smartphone className="w-5 h-5 mr-2" />
+                          Pay Now with UPI
+                        </Button>
+                      )}
+                      {paymentCompleted && (
+                        <div className="flex items-center justify-center gap-2 p-3 bg-green-500/10 rounded-xl mt-4">
+                          <CheckCircle className="w-5 h-5 text-green-600" />
+                          <span className="font-medium text-green-600">Payment Completed</span>
+                        </div>
+                      )}
                     </div>
                   </motion.div>
                 )}
@@ -870,6 +972,19 @@ const BookRide = () => {
                     </span>
                   )}
                 </div>
+
+                {/* Pay Now After Ride - if not yet paid */}
+                {!paymentCompleted && selectedPaymentMethod === 'upi' && (
+                  <Button
+                    variant="hero"
+                    size="lg"
+                    className="w-full mt-4"
+                    onClick={() => setShowPaymentModal(true)}
+                  >
+                    <Smartphone className="w-5 h-5 mr-2" />
+                    Pay Now with UPI
+                  </Button>
+                )}
               </div>
 
               <Button variant="hero" size="xl" className="w-full" asChild>

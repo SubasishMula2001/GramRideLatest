@@ -22,6 +22,7 @@ import AdminDrivers from "./pages/admin/AdminDrivers";
 import AdminRides from "./pages/admin/AdminRides";
 import AdminLogs from "./pages/admin/AdminLogs";
 import AdminReports from "./pages/admin/AdminReports";
+import AdminPaymentSettings from "./pages/admin/AdminPaymentSettings";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -107,6 +108,11 @@ const App = () => (
             <Route path="/admin/reports" element={
               <ProtectedRoute allowedRoles={['admin']}>
                 <AdminReports />
+              </ProtectedRoute>
+            } />
+            <Route path="/admin/payments" element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <AdminPaymentSettings />
               </ProtectedRoute>
             } />
             
