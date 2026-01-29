@@ -39,15 +39,9 @@ const AdminDashboard = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!authLoading) {
-      if (!user) {
-        navigate('/login');
-        return;
-      }
-      if (userRole !== 'admin') {
-        navigate('/');
-        return;
-      }
+    // ProtectedRoute already handles auth and role checks
+    // Only fetch data when auth is loaded and user has access
+    if (!authLoading && user && userRole === 'admin') {
       fetchDashboardData();
     }
   }, [user, userRole, authLoading]);

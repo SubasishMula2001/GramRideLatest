@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Search, Filter, MapPin, Navigation, Loader2, Car } from 'lucide-react';
 import AdminLayout from '@/components/AdminLayout';
 import { Button } from '@/components/ui/button';
@@ -24,7 +23,6 @@ interface RideData {
 }
 
 const AdminRides = () => {
-  const navigate = useNavigate();
   const { user, userRole, loading: authLoading } = useAuth();
   
   const [rides, setRides] = useState<RideData[]>([]);
@@ -33,11 +31,9 @@ const AdminRides = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
   useEffect(() => {
-    if (!authLoading) {
-      if (!user || userRole !== 'admin') {
-        navigate('/login');
-        return;
-      }
+    // ProtectedRoute already handles auth and role checks
+    // Only fetch data when auth is loaded and user has access
+    if (!authLoading && user && userRole === 'admin') {
       fetchRides();
     }
   }, [user, userRole, authLoading]);

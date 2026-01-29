@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Search, Filter, Download, Activity, User, Car, Shield, AlertTriangle, Loader2 } from 'lucide-react';
 import AdminLayout from '@/components/AdminLayout';
 import { Button } from '@/components/ui/button';
@@ -40,7 +39,6 @@ const getTypeColor = (type: string) => {
 };
 
 const AdminLogs = () => {
-  const navigate = useNavigate();
   const { user, userRole, loading: authLoading } = useAuth();
   
   const [logs, setLogs] = useState<LogData[]>([]);
@@ -49,11 +47,9 @@ const AdminLogs = () => {
   const [filterType, setFilterType] = useState('all');
 
   useEffect(() => {
-    if (!authLoading) {
-      if (!user || userRole !== 'admin') {
-        navigate('/login');
-        return;
-      }
+    // ProtectedRoute already handles auth and role checks
+    // Only fetch data when auth is loaded and user has access
+    if (!authLoading && user && userRole === 'admin') {
       fetchLogs();
     }
   }, [user, userRole, authLoading]);
