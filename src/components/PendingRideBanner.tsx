@@ -155,7 +155,7 @@ const PendingRideBanner: React.FC = () => {
         </div>
 
         <div className="flex flex-col gap-2">
-          <Link to="/book">
+          <Link to="/book" state={{ pendingRideId: pendingRide.id }}>
             <Button size="sm" variant="outline" className="text-xs">
               {isBengali ? 'দেখুন' : 'View'}
             </Button>
