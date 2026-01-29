@@ -15,6 +15,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useDriverLocationSubscription } from '@/hooks/useDriverLocationSubscription';
 import { format } from 'date-fns';
+import { calculateFare, FARE_CONFIG, isNightTime } from '@/lib/fareCalculator';
 
 // Helper to clean Plus Codes from addresses
 const cleanPlusCode = (address: string): string => {
@@ -74,9 +75,10 @@ const BookRide = () => {
   // Route calculated values
   const [estimatedDistance, setEstimatedDistance] = useState(3.5);
   const [estimatedTime, setEstimatedTime] = useState(12);
-  const baseFare = bookingType === 'passenger' ? 20 : 30;
-  const perKmRate = bookingType === 'passenger' ? 8 : 12;
-  const estimatedFare = Math.round(baseFare + (estimatedDistance * perKmRate));
+  
+  // Calculate fare using village-friendly rates (same for passenger & goods)
+  const fareBreakdown = calculateFare(estimatedDistance, scheduledFor || undefined);
+  const estimatedFare = fareBreakdown.totalFare;
 
   // Subscribe to driver location updates during active ride
   const isRideActive = step === 'booked' || step === 'in_progress';
@@ -459,13 +461,25 @@ const BookRide = () => {
                       {estimatedTime} min
                     </span>
                   </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Rate</span>
+                    <span className="text-foreground">₹{FARE_CONFIG.perKmRate}/km</span>
+                  </div>
+                  {fareBreakdown.isNight && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground flex items-center gap-1">
+                        <span>🌙</span> Night Charge (+{FARE_CONFIG.nightChargePercent}%)
+                      </span>
+                      <span className="text-secondary font-medium">+₹{fareBreakdown.nightCharge}</span>
+                    </div>
+                  )}
                   <div className="border-t border-border pt-3 flex items-center justify-between">
                     <span className="font-medium text-foreground">Estimated Fare</span>
                     <span className="text-xl font-bold text-primary flex items-center">
                       <IndianRupee className="w-5 h-5" />
                       {estimatedFare}
                     </span>
-                </div>
+                  </div>
                 </div>
               </div>
 
