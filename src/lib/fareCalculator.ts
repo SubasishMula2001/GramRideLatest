@@ -12,7 +12,7 @@ export interface FareConfig {
 // Village-friendly rates (same for passenger and goods as requested)
 export const FARE_CONFIG: FareConfig = {
   perKmRate: 10,           // ₹10 per km - affordable for villages
-  minimumFare: 30,         // Minimum ₹30 per ride
+  minimumFare: 10,         // Minimum ₹10 per ride
   nightChargePercent: 20,  // 20% extra at night
   nightStartHour: 22,      // Night starts at 10 PM
   nightEndHour: 6,         // Night ends at 6 AM
