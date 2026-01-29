@@ -1,34 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { CreditCard, Key, Shield, ExternalLink, CheckCircle, AlertTriangle, Info, Loader2 } from 'lucide-react';
+import React from 'react';
+import { CreditCard, Key, Shield, ExternalLink, CheckCircle, Info, Loader2 } from 'lucide-react';
 import AdminLayout from '@/components/AdminLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useAuth } from '@/contexts/AuthContext';
-import { useToast } from '@/hooks/use-toast';
 
 const AdminPaymentSettings = () => {
-  const navigate = useNavigate();
-  const { user, userRole, loading: authLoading } = useAuth();
-  const { toast } = useToast();
-  const [isTestMode, setIsTestMode] = useState(true);
+  const { loading: authLoading } = useAuth();
 
-  useEffect(() => {
-    if (!authLoading) {
-      if (!user) {
-        navigate('/login');
-        return;
-      }
-      if (userRole !== 'admin') {
-        navigate('/');
-        return;
-      }
-    }
-  }, [user, userRole, authLoading, navigate]);
+  // ProtectedRoute already handles auth and role checks
+  // No need for redundant navigation logic here
 
   if (authLoading) {
     return (

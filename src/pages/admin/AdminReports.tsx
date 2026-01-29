@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { 
   IndianRupee, 
   TrendingUp, 
@@ -43,7 +42,6 @@ interface RideTypeData {
 }
 
 const AdminReports = () => {
-  const navigate = useNavigate();
   const { user, userRole, loading: authLoading } = useAuth();
   const [period, setPeriod] = useState<'week' | 'month'>('week');
   const [loading, setLoading] = useState(true);
@@ -59,15 +57,9 @@ const AdminReports = () => {
   const [rideTypeData, setRideTypeData] = useState<RideTypeData[]>([]);
 
   useEffect(() => {
-    if (!authLoading) {
-      if (!user) {
-        navigate('/login');
-        return;
-      }
-      if (userRole !== 'admin') {
-        navigate('/');
-        return;
-      }
+    // ProtectedRoute already handles auth and role checks
+    // Only fetch data when auth is loaded and user has access
+    if (!authLoading && user && userRole === 'admin') {
       fetchReportData();
     }
   }, [user, userRole, authLoading, period]);
