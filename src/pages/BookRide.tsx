@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Users, Package, IndianRupee, Clock, MapPin, Navigation, Loader2, CheckCircle, Car, Phone, User, Star, Locate, KeyRound, Calendar, Smartphone, Banknote, CreditCard } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
@@ -53,6 +53,7 @@ interface UserProfile {
 
 const BookRide = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, loading: authLoading } = useAuth();
   
   const [bookingType, setBookingType] = useState<BookingType>(null);
@@ -102,11 +103,15 @@ const BookRide = () => {
     setEstimatedTime(duration);
   }, []);
 
+  // Check for pending ride from navigation state or fetch existing pending ride
   useEffect(() => {
     if (!authLoading && !user) {
       toast.error('Please login to book a ride');
       navigate('/login');
-    } else if (user) {
+      return;
+    }
+    
+    if (user) {
       // Fetch user profile for displaying name
       supabase
         .from('profiles')
@@ -116,8 +121,84 @@ const BookRide = () => {
         .then(({ data }) => {
           if (data) setUserProfile(data);
         });
+
+      // Check if navigating from pending ride banner
+      const state = location.state as { pendingRideId?: string } | null;
+      if (state?.pendingRideId) {
+        // Load the pending ride
+        loadPendingRide(state.pendingRideId);
+        // Clear the state to prevent re-loading on refresh
+        navigate(location.pathname, { replace: true, state: {} });
+      } else {
+        // Check for any existing pending/active ride
+        checkExistingRide();
+      }
     }
   }, [user, authLoading, navigate]);
+
+  const loadPendingRide = async (pendingRideId: string) => {
+    try {
+      const { data: ride, error } = await supabase
+        .from('rides')
+        .select('*')
+        .eq('id', pendingRideId)
+        .maybeSingle();
+
+      if (error) throw error;
+      if (!ride) return;
+
+      // Restore ride state
+      setRideId(ride.id);
+      setBookingType(ride.ride_type as BookingType);
+      setPickupData({ 
+        address: ride.pickup_location, 
+        lat: ride.pickup_lat ?? undefined, 
+        lng: ride.pickup_lng ?? undefined 
+      });
+      setDropData({ 
+        address: ride.dropoff_location, 
+        lat: ride.dropoff_lat ?? undefined, 
+        lng: ride.dropoff_lng ?? undefined 
+      });
+      setRideOtp(ride.otp || null);
+      setSelectedPaymentMethod(ride.payment_method as 'upi' | 'cash' | null);
+      
+      if (ride.fare) setEstimatedDistance(ride.distance_km || 3.5);
+      if (ride.duration_mins) setEstimatedTime(ride.duration_mins);
+
+      // Set appropriate step based on status
+      if (ride.status === 'pending') {
+        setStep('searching');
+      } else if (ride.status === 'accepted' && ride.driver_id) {
+        await fetchDriverInfo(ride.driver_id);
+        setStep('booked');
+      } else if (ride.status === 'in_progress') {
+        if (ride.driver_id) await fetchDriverInfo(ride.driver_id);
+        setStep('in_progress');
+      }
+    } catch (error) {
+      console.error('Error loading pending ride:', error);
+    }
+  };
+
+  const checkExistingRide = async () => {
+    try {
+      const { data: ride } = await supabase
+        .from('rides')
+        .select('*')
+        .eq('user_id', user!.id)
+        .in('status', ['pending', 'accepted', 'in_progress'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (ride) {
+        loadPendingRide(ride.id);
+      }
+    } catch (error) {
+      console.error('Error checking existing ride:', error);
+    }
+  };
 
   // Subscribe to ride updates when waiting for driver
   useEffect(() => {

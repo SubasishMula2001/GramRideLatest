@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { MapPin, Navigation, Clock, IndianRupee, Package, Users, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
@@ -23,12 +23,9 @@ interface RideHistoryProps {
 const RideHistory: React.FC<RideHistoryProps> = ({ userId, userType }) => {
   const [rides, setRides] = useState<Ride[]>([]);
   const [loading, setLoading] = useState(true);
+  const [driverId, setDriverId] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchRides();
-  }, [userId, userType]);
-
-  const fetchRides = async () => {
+  const fetchRides = useCallback(async () => {
     try {
       let query = supabase
         .from('rides')
@@ -40,19 +37,24 @@ const RideHistory: React.FC<RideHistoryProps> = ({ userId, userType }) => {
         query = query.eq('user_id', userId);
       } else {
         // For drivers, we need to get the driver_id first
-        const { data: driverData } = await supabase
-          .from('drivers')
-          .select('id')
-          .eq('user_id', userId)
-          .maybeSingle();
+        let currentDriverId = driverId;
+        if (!currentDriverId) {
+          const { data: driverData } = await supabase
+            .from('drivers')
+            .select('id')
+            .eq('user_id', userId)
+            .maybeSingle();
 
-        if (driverData) {
-          query = query.eq('driver_id', driverData.id);
-        } else {
-          setRides([]);
-          setLoading(false);
-          return;
+          if (driverData) {
+            currentDriverId = driverData.id;
+            setDriverId(currentDriverId);
+          } else {
+            setRides([]);
+            setLoading(false);
+            return;
+          }
         }
+        query = query.eq('driver_id', currentDriverId);
       }
 
       const { data, error } = await query;
@@ -64,7 +66,40 @@ const RideHistory: React.FC<RideHistoryProps> = ({ userId, userType }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId, userType, driverId]);
+
+  useEffect(() => {
+    fetchRides();
+
+    // Subscribe to ride updates for real-time status changes
+    const channel = supabase
+      .channel(`ride-history-${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'rides',
+          filter: userType === 'user' ? `user_id=eq.${userId}` : undefined
+        },
+        (payload) => {
+          if (payload.eventType === 'UPDATE') {
+            const updated = payload.new as Ride;
+            setRides(prev => prev.map(ride => 
+              ride.id === updated.id ? { ...ride, ...updated } : ride
+            ));
+          } else if (payload.eventType === 'INSERT') {
+            // Refetch to get proper ordering
+            fetchRides();
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId, userType, fetchRides]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
