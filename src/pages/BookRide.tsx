@@ -300,8 +300,9 @@ const BookRide = () => {
 
     setLoading(true);
     try {
-      // Generate 4-digit OTP for pickup verification
-      const otp = Math.floor(1000 + Math.random() * 9000).toString();
+      // Generate 4-digit OTP for pickup verification using cryptographically secure randomness
+      const randomValues = crypto.getRandomValues(new Uint32Array(1));
+      const otp = (1000 + (randomValues[0] % 9000)).toString();
       
       const { data, error } = await supabase
         .from('rides')

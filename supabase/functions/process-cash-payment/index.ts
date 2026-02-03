@@ -1,9 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { getCorsHeaders, handleCorsPreflightRequest } from '../_shared/cors.ts';
 
 interface CashPaymentRequest {
   ride_id: string;
@@ -11,23 +7,35 @@ interface CashPaymentRequest {
   confirmed_by: 'user' | 'driver';
 }
 
-// Decode JWT to extract user ID
+// Decode JWT to extract user ID (handles URL-safe Base64)
 function decodeJwt(token: string): { sub?: string } | null {
   try {
     const parts = token.split('.');
-    if (parts.length !== 3) return null;
-    const payload = JSON.parse(atob(parts[1]));
+    if (parts.length !== 3) {
+      console.error('JWT has invalid number of parts:', parts.length);
+      return null;
+    }
+    // Handle URL-safe Base64 encoding
+    let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    // Add padding if necessary
+    while (base64.length % 4) {
+      base64 += '=';
+    }
+    const payload = JSON.parse(atob(base64));
     return payload;
-  } catch {
+  } catch (err) {
+    console.error('JWT decode error:', err);
     return null;
   }
 }
 
 Deno.serve(async (req) => {
+  const origin = req.headers.get('origin');
+  const corsHeaders = getCorsHeaders(origin);
+
   // Handle CORS preflight
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+  const preflightResponse = handleCorsPreflightRequest(req);
+  if (preflightResponse) return preflightResponse;
 
   try {
     // Verify authentication
@@ -155,6 +163,8 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('Unexpected error:', error);
+    const origin = req.headers.get('origin');
+    const corsHeaders = getCorsHeaders(origin);
     return new Response(
       JSON.stringify({ error: 'Internal server error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
