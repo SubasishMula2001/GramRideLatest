@@ -15,7 +15,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useDriverLocationSubscription } from '@/hooks/useDriverLocationSubscription';
 import { format } from 'date-fns';
-import { calculateFare, FARE_CONFIG, isNightTime } from '@/lib/fareCalculator';
+import { calculateFare, FARE_CONFIG, isNightTime, fetchNightChargesSetting } from '@/lib/fareCalculator';
 
 // Helper to clean Plus Codes from addresses
 const cleanPlusCode = (address: string): string => {
@@ -77,8 +77,11 @@ const BookRide = () => {
   const [estimatedDistance, setEstimatedDistance] = useState(3.5);
   const [estimatedTime, setEstimatedTime] = useState(12);
   
+  // Night charges setting from database
+  const [nightChargesEnabled, setNightChargesEnabled] = useState(false);
+  
   // Calculate fare using village-friendly rates (same for passenger & goods)
-  const fareBreakdown = calculateFare(estimatedDistance, scheduledFor || undefined);
+  const fareBreakdown = calculateFare(estimatedDistance, scheduledFor || undefined, nightChargesEnabled);
   const estimatedFare = fareBreakdown.totalFare;
 
   // Subscribe to driver location updates during active ride
@@ -121,6 +124,9 @@ const BookRide = () => {
         .then(({ data }) => {
           if (data) setUserProfile(data);
         });
+
+      // Fetch night charges setting
+      fetchNightChargesSetting().then(setNightChargesEnabled);
 
       // Check if navigating from pending ride banner
       const state = location.state as { pendingRideId?: string } | null;

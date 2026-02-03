@@ -1,14 +1,74 @@
-import React from 'react';
-import { CreditCard, Key, Shield, ExternalLink, CheckCircle, Info, Loader2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { CreditCard, Key, Shield, ExternalLink, CheckCircle, Info, Loader2, Moon } from 'lucide-react';
 import AdminLayout from '@/components/AdminLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import { updateNightChargesCache } from '@/lib/fareCalculator';
 
 const AdminPaymentSettings = () => {
   const { loading: authLoading } = useAuth();
+  const [nightChargesEnabled, setNightChargesEnabled] = useState(false);
+  const [loadingSettings, setLoadingSettings] = useState(true);
+  const [savingNightCharges, setSavingNightCharges] = useState(false);
+
+  // Fetch current settings
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('app_settings')
+          .select('value')
+          .eq('key', 'night_charges_enabled')
+          .single();
+
+        if (error) {
+          console.error('Error fetching settings:', error);
+        } else if (data) {
+          const enabled = data.value === true || data.value === 'true';
+          setNightChargesEnabled(enabled);
+          updateNightChargesCache(enabled);
+        }
+      } catch (err) {
+        console.error('Error:', err);
+      } finally {
+        setLoadingSettings(false);
+      }
+    };
+
+    fetchSettings();
+  }, []);
+
+  const handleNightChargesToggle = async (enabled: boolean) => {
+    setSavingNightCharges(true);
+    try {
+      const { error } = await supabase
+        .from('app_settings')
+        .update({ value: enabled })
+        .eq('key', 'night_charges_enabled');
+
+      if (error) {
+        console.error('Error updating night charges setting:', error);
+        toast.error('Failed to update night charges setting');
+        return;
+      }
+
+      setNightChargesEnabled(enabled);
+      updateNightChargesCache(enabled);
+      toast.success(enabled ? 'Night charges enabled' : 'Night charges disabled');
+    } catch (err) {
+      console.error('Error:', err);
+      toast.error('Failed to update setting');
+    } finally {
+      setSavingNightCharges(false);
+    }
+  };
 
   // ProtectedRoute already handles auth and role checks
   // No need for redundant navigation logic here
@@ -31,9 +91,70 @@ const AdminPaymentSettings = () => {
             Payment Settings
           </h1>
           <p className="text-muted-foreground mt-1">
-            Manage payment gateway configuration and API keys
+            Manage payment gateway configuration and fare settings
           </p>
         </div>
+
+        {/* Fare Settings */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Moon className="h-5 w-5 text-primary" />
+              Fare Settings
+            </CardTitle>
+            <CardDescription>
+              Configure pricing and surcharges for rides
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-primary/10 rounded-full">
+                  <Moon className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <Label htmlFor="night-charges" className="text-base font-medium">
+                    Night Charges
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    Apply 20% surcharge between 10 PM - 6 AM
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                {loadingSettings ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <>
+                    <Switch
+                      id="night-charges"
+                      checked={nightChargesEnabled}
+                      onCheckedChange={handleNightChargesToggle}
+                      disabled={savingNightCharges}
+                    />
+                    <Badge 
+                      variant={nightChargesEnabled ? "default" : "secondary"}
+                      className={nightChargesEnabled 
+                        ? "bg-green-500/10 text-green-600" 
+                        : "bg-muted text-muted-foreground"
+                      }
+                    >
+                      {nightChargesEnabled ? 'Enabled' : 'Disabled'}
+                    </Badge>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <Alert variant="default" className="bg-muted/30">
+              <Info className="h-4 w-4" />
+              <AlertDescription>
+                When enabled, a 20% surcharge will be automatically added to fares for rides booked between 10 PM and 6 AM.
+                This is disabled by default.
+              </AlertDescription>
+            </Alert>
+          </CardContent>
+        </Card>
 
         {/* Current Status */}
         <Card>
