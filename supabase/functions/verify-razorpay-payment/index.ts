@@ -12,14 +12,24 @@ interface VerifyPaymentRequest {
   razorpay_signature: string;
 }
 
-// Decode JWT to extract user ID
+// Decode JWT to extract user ID (handles URL-safe Base64)
 function decodeJwt(token: string): { sub?: string } | null {
   try {
     const parts = token.split('.');
-    if (parts.length !== 3) return null;
-    const payload = JSON.parse(atob(parts[1]));
+    if (parts.length !== 3) {
+      console.error('JWT has invalid number of parts:', parts.length);
+      return null;
+    }
+    // Handle URL-safe Base64 encoding
+    let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    // Add padding if necessary
+    while (base64.length % 4) {
+      base64 += '=';
+    }
+    const payload = JSON.parse(atob(base64));
     return payload;
-  } catch {
+  } catch (err) {
+    console.error('JWT decode error:', err);
     return null;
   }
 }
