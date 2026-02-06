@@ -151,6 +151,7 @@ const DriverDashboard = () => {
       console.log('Fetching active ride for driver:', driverData.id);
       
       try {
+        // Get the most recent active ride (order by accepted_at desc, limit 1)
         const { data, error } = await supabase
           .from('rides')
           .select(`
@@ -167,10 +168,13 @@ const DriverDashboard = () => {
             dropoff_lat,
             dropoff_lng,
             otp,
-            payment_method
+            payment_method,
+            accepted_at
           `)
           .eq('driver_id', driverData.id)
           .in('status', ['accepted', 'in_progress'])
+          .order('accepted_at', { ascending: false })
+          .limit(1)
           .maybeSingle();
 
         console.log('Active ride query result:', { data, error });
