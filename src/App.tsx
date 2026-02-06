@@ -24,6 +24,8 @@ import AdminLogs from "./pages/admin/AdminLogs";
 import AdminReports from "./pages/admin/AdminReports";
 import AdminPaymentSettings from "./pages/admin/AdminPaymentSettings";
 import AdminLiveMonitor from "./pages/admin/AdminLiveMonitor";
+import AdminPromoCodes from "./pages/admin/AdminPromoCodes";
+import AdminPayouts from "./pages/admin/AdminPayouts";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -119,6 +121,16 @@ const App = () => (
             <Route path="/admin/payments" element={
               <ProtectedRoute allowedRoles={['admin']}>
                 <AdminPaymentSettings />
+              </ProtectedRoute>
+            } />
+            <Route path="/admin/promo-codes" element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <AdminPromoCodes />
+              </ProtectedRoute>
+            } />
+            <Route path="/admin/payouts" element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <AdminPayouts />
               </ProtectedRoute>
             } />
             

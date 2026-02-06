@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CreditCard, Key, Shield, ExternalLink, CheckCircle, Info, Loader2, Moon } from 'lucide-react';
+import { CreditCard, Key, Shield, ExternalLink, CheckCircle, Info, Loader2, Moon, TrendingUp } from 'lucide-react';
 import AdminLayout from '@/components/AdminLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,16 +7,24 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { updateNightChargesCache } from '@/lib/fareCalculator';
+import { updateNightChargesCache, updateSurgeCache } from '@/lib/fareCalculator';
 
 const AdminPaymentSettings = () => {
   const { loading: authLoading } = useAuth();
   const [nightChargesEnabled, setNightChargesEnabled] = useState(false);
+  const [surgeSettings, setSurgeSettings] = useState({
+    enabled: false,
+    multiplier: '1.5',
+    startHour: '8',
+    endHour: '10',
+  });
   const [loadingSettings, setLoadingSettings] = useState(true);
   const [savingNightCharges, setSavingNightCharges] = useState(false);
+  const [savingSurge, setSavingSurge] = useState(false);
 
   // Fetch current settings
   useEffect(() => {
@@ -24,16 +32,31 @@ const AdminPaymentSettings = () => {
       try {
         const { data, error } = await supabase
           .from('app_settings')
-          .select('value')
-          .eq('key', 'night_charges_enabled')
-          .single();
+          .select('key, value')
+          .in('key', [
+            'night_charges_enabled',
+            'surge_pricing_enabled',
+            'surge_multiplier',
+            'surge_start_hour',
+            'surge_end_hour'
+          ]);
 
         if (error) {
           console.error('Error fetching settings:', error);
         } else if (data) {
-          const enabled = data.value === true || data.value === 'true';
-          setNightChargesEnabled(enabled);
-          updateNightChargesCache(enabled);
+          const settings: Record<string, any> = {};
+          data.forEach(s => { settings[s.key] = s.value; });
+          
+          const nightEnabled = settings.night_charges_enabled === true || settings.night_charges_enabled === 'true';
+          setNightChargesEnabled(nightEnabled);
+          updateNightChargesCache(nightEnabled);
+          
+          setSurgeSettings({
+            enabled: settings.surge_pricing_enabled === true || settings.surge_pricing_enabled === 'true',
+            multiplier: settings.surge_multiplier?.toString() || '1.5',
+            startHour: settings.surge_start_hour?.toString() || '8',
+            endHour: settings.surge_end_hour?.toString() || '10',
+          });
         }
       } catch (err) {
         console.error('Error:', err);
@@ -67,6 +90,41 @@ const AdminPaymentSettings = () => {
       toast.error('Failed to update setting');
     } finally {
       setSavingNightCharges(false);
+    }
+  };
+
+  const handleSaveSurgeSettings = async () => {
+    setSavingSurge(true);
+    try {
+      const updates = [
+        { key: 'surge_pricing_enabled', value: surgeSettings.enabled },
+        { key: 'surge_multiplier', value: surgeSettings.multiplier },
+        { key: 'surge_start_hour', value: surgeSettings.startHour },
+        { key: 'surge_end_hour', value: surgeSettings.endHour },
+      ];
+
+      for (const update of updates) {
+        const { error } = await supabase
+          .from('app_settings')
+          .update({ value: update.value })
+          .eq('key', update.key);
+        
+        if (error) throw error;
+      }
+
+      updateSurgeCache({
+        enabled: surgeSettings.enabled,
+        multiplier: parseFloat(surgeSettings.multiplier),
+        startHour: parseInt(surgeSettings.startHour),
+        endHour: parseInt(surgeSettings.endHour),
+      });
+      
+      toast.success('Surge pricing settings saved');
+    } catch (err) {
+      console.error('Error:', err);
+      toast.error('Failed to save surge pricing settings');
+    } finally {
+      setSavingSurge(false);
     }
   };
 
@@ -151,6 +209,122 @@ const AdminPaymentSettings = () => {
               <AlertDescription>
                 When enabled, a 20% surcharge will be automatically added to fares for rides booked between 10 PM and 6 AM.
                 This is disabled by default.
+              </AlertDescription>
+            </Alert>
+          </CardContent>
+        </Card>
+
+        {/* Surge Pricing Settings */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-primary" />
+              Surge Pricing
+            </CardTitle>
+            <CardDescription>
+              Configure dynamic pricing during peak hours
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-primary/10 rounded-full">
+                  <TrendingUp className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <Label htmlFor="surge-enabled" className="text-base font-medium">
+                    Enable Surge Pricing
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    Apply higher rates during peak hours
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                {loadingSettings ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <>
+                    <Switch
+                      id="surge-enabled"
+                      checked={surgeSettings.enabled}
+                      onCheckedChange={(checked) => setSurgeSettings(prev => ({ ...prev, enabled: checked }))}
+                    />
+                    <Badge 
+                      variant={surgeSettings.enabled ? "default" : "secondary"}
+                      className={surgeSettings.enabled 
+                        ? "bg-orange-500/10 text-orange-600" 
+                        : "bg-muted text-muted-foreground"
+                      }
+                    >
+                      {surgeSettings.enabled ? 'Enabled' : 'Disabled'}
+                    </Badge>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="surge-multiplier">Surge Multiplier</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="surge-multiplier"
+                    type="number"
+                    step="0.1"
+                    min="1"
+                    max="5"
+                    value={surgeSettings.multiplier}
+                    onChange={(e) => setSurgeSettings(prev => ({ ...prev, multiplier: e.target.value }))}
+                    className="w-20"
+                  />
+                  <span className="text-muted-foreground">×</span>
+                </div>
+                <p className="text-xs text-muted-foreground">e.g., 1.5 = 50% increase</p>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="surge-start">Start Hour</Label>
+                <Input
+                  id="surge-start"
+                  type="number"
+                  min="0"
+                  max="23"
+                  value={surgeSettings.startHour}
+                  onChange={(e) => setSurgeSettings(prev => ({ ...prev, startHour: e.target.value }))}
+                  className="w-20"
+                />
+                <p className="text-xs text-muted-foreground">24-hour format</p>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="surge-end">End Hour</Label>
+                <Input
+                  id="surge-end"
+                  type="number"
+                  min="0"
+                  max="23"
+                  value={surgeSettings.endHour}
+                  onChange={(e) => setSurgeSettings(prev => ({ ...prev, endHour: e.target.value }))}
+                  className="w-20"
+                />
+                <p className="text-xs text-muted-foreground">24-hour format</p>
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <Button onClick={handleSaveSurgeSettings} disabled={savingSurge}>
+                {savingSurge ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                Save Surge Settings
+              </Button>
+            </div>
+
+            <Alert variant="default" className="bg-muted/30">
+              <Info className="h-4 w-4" />
+              <AlertDescription>
+                When surge pricing is enabled, fares will be multiplied by {surgeSettings.multiplier}× 
+                between {surgeSettings.startHour}:00 and {surgeSettings.endHour}:00.
+                Example: A ₹100 ride becomes ₹{Math.round(100 * parseFloat(surgeSettings.multiplier || '1'))}.
               </AlertDescription>
             </Alert>
           </CardContent>
