@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Plus, Filter, Edit, User, Loader2 } from 'lucide-react';
+import { Search, Plus, Filter, Edit, User, Loader2, IndianRupee, Ban, CheckCircle } from 'lucide-react';
 import AdminLayout from '@/components/AdminLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,6 +13,17 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import {
   Select,
   SelectContent,
@@ -33,6 +44,8 @@ interface UserData {
   role: string;
   created_at: string;
   rides_count: number;
+  credits: number;
+  is_suspended: boolean;
 }
 
 const AdminUsers = () => {
@@ -43,11 +56,15 @@ const AdminUsers = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isCreditsDialogOpen, setIsCreditsDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserData | null>(null);
   const [newUser, setNewUser] = useState({ full_name: '', phone: '', email: '', password: '' });
   const [editForm, setEditForm] = useState({ full_name: '', phone: '', role: '' });
+  const [creditsAmount, setCreditsAmount] = useState('');
+  const [creditsAction, setCreditsAction] = useState<'add' | 'remove'>('add');
   const [addingUser, setAddingUser] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [processingCredits, setProcessingCredits] = useState(false);
 
   useEffect(() => {
     // ProtectedRoute already handles auth and role checks
@@ -61,7 +78,7 @@ const AdminUsers = () => {
     try {
       const { data: profiles, error } = await supabase
         .from('profiles')
-        .select('id, full_name, phone, email, created_at')
+        .select('id, full_name, phone, email, created_at, credits')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -108,7 +125,9 @@ const AdminUsers = () => {
               month: 'short',
               year: 'numeric'
             }),
-            rides_count: count || 0
+            rides_count: count || 0,
+            credits: profile.credits || 0,
+            is_suspended: false // We'll add suspension feature later with a proper table
           };
         })
       );
@@ -119,6 +138,48 @@ const AdminUsers = () => {
       toast.error('Failed to load users');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Handle credits management
+  const handleOpenCreditsDialog = (userData: UserData) => {
+    setEditingUser(userData);
+    setCreditsAmount('');
+    setCreditsAction('add');
+    setIsCreditsDialogOpen(true);
+  };
+
+  const handleUpdateCredits = async () => {
+    if (!editingUser || !creditsAmount) return;
+
+    const amount = parseFloat(creditsAmount);
+    if (isNaN(amount) || amount <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+
+    setProcessingCredits(true);
+    try {
+      const newCredits = creditsAction === 'add' 
+        ? editingUser.credits + amount 
+        : Math.max(0, editingUser.credits - amount);
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({ credits: newCredits })
+        .eq('id', editingUser.id);
+
+      if (error) throw error;
+
+      toast.success(`Credits ${creditsAction === 'add' ? 'added' : 'removed'} successfully`);
+      setIsCreditsDialogOpen(false);
+      setEditingUser(null);
+      fetchUsers();
+    } catch (error: any) {
+      console.error('Error updating credits:', error);
+      toast.error(error.message || 'Failed to update credits');
+    } finally {
+      setProcessingCredits(false);
     }
   };
 
@@ -233,15 +294,34 @@ const AdminUsers = () => {
         </Badge>
       )
     },
-    { key: 'rides_count', header: 'Total Rides' },
+    { key: 'rides_count', header: 'Rides' },
+    { 
+      key: 'credits', 
+      header: 'Credits',
+      render: (item: UserData) => (
+        <div className="flex items-center gap-2">
+          <span className="font-medium text-secondary">₹{item.credits}</span>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="h-6 px-2"
+            onClick={() => handleOpenCreditsDialog(item)}
+          >
+            <IndianRupee className="w-3 h-3" />
+          </Button>
+        </div>
+      )
+    },
     { key: 'created_at', header: 'Joined' },
     { 
       key: 'actions', 
-      header: '',
+      header: 'Actions',
       render: (item: UserData) => (
-        <Button variant="ghost" size="icon" onClick={() => handleEditUser(item)}>
-          <Edit className="w-4 h-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="icon" onClick={() => handleEditUser(item)}>
+            <Edit className="w-4 h-4" />
+          </Button>
+        </div>
       )
     },
   ];
@@ -399,6 +479,68 @@ const AdminUsers = () => {
                   disabled={savingEdit}
                 >
                   {savingEdit ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save Changes'}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Credits Management Dialog */}
+        <Dialog open={isCreditsDialogOpen} onOpenChange={setIsCreditsDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Manage Credits</DialogTitle>
+              <DialogDescription>
+                Add or remove credits for {editingUser?.full_name || 'user'}
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-4 mt-4">
+              <div className="bg-muted/50 rounded-lg p-4 text-center">
+                <p className="text-sm text-muted-foreground">Current Balance</p>
+                <p className="text-3xl font-bold text-secondary">₹{editingUser?.credits || 0}</p>
+              </div>
+              
+              <div className="flex gap-2">
+                <Button 
+                  variant={creditsAction === 'add' ? 'default' : 'outline'}
+                  className="flex-1"
+                  onClick={() => setCreditsAction('add')}
+                >
+                  Add Credits
+                </Button>
+                <Button 
+                  variant={creditsAction === 'remove' ? 'default' : 'outline'}
+                  className="flex-1"
+                  onClick={() => setCreditsAction('remove')}
+                >
+                  Remove Credits
+                </Button>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="credits-amount">Amount (₹)</Label>
+                <Input 
+                  id="credits-amount" 
+                  type="number"
+                  min="0"
+                  placeholder="Enter amount"
+                  value={creditsAmount}
+                  onChange={(e) => setCreditsAmount(e.target.value)}
+                />
+              </div>
+              
+              <div className="flex gap-3 pt-4">
+                <Button variant="outline" className="flex-1" onClick={() => setIsCreditsDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button 
+                  variant="hero" 
+                  className="flex-1" 
+                  onClick={handleUpdateCredits}
+                  disabled={processingCredits || !creditsAmount}
+                >
+                  {processingCredits ? <Loader2 className="w-4 h-4 animate-spin" /> : `${creditsAction === 'add' ? 'Add' : 'Remove'} ₹${creditsAmount || 0}`}
                 </Button>
               </div>
             </div>

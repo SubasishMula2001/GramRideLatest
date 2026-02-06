@@ -8,6 +8,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 
 const navItems = [
   { path: '/admin', emoji: '📊', label: 'Dashboard', exact: true },
+  { path: '/admin/live', emoji: '🔴', label: 'Live Monitor' },
   { path: '/admin/users', emoji: '👥', label: 'Users' },
   { path: '/admin/drivers', emoji: '🚗', label: 'Drivers' },
   { path: '/admin/rides', emoji: '🛣️', label: 'Rides' },
