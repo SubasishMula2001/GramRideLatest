@@ -12,6 +12,8 @@ const navItems = [
   { path: '/admin/users', emoji: '👥', label: 'Users' },
   { path: '/admin/drivers', emoji: '🚗', label: 'Drivers' },
   { path: '/admin/rides', emoji: '🛣️', label: 'Rides' },
+  { path: '/admin/promo-codes', emoji: '🎫', label: 'Promo Codes' },
+  { path: '/admin/payouts', emoji: '💰', label: 'Driver Payouts' },
   { path: '/admin/payments', emoji: '💳', label: 'Payment Settings' },
   { path: '/admin/reports', emoji: '📈', label: 'Reports' },
   { path: '/admin/logs', emoji: '📋', label: 'Activity Logs' },
