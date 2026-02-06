@@ -189,12 +189,14 @@ const BookRide = () => {
 
   const checkExistingRide = async () => {
     try {
+      // Get the most recent active ride (order by accepted_at desc for consistency with driver side)
+      // For pending rides, accepted_at is null, so we also check created_at
       const { data: ride } = await supabase
         .from('rides')
         .select('*')
         .eq('user_id', user!.id)
         .in('status', ['pending', 'accepted', 'in_progress'])
-        .order('created_at', { ascending: false })
+        .order('accepted_at', { ascending: false, nullsFirst: false })
         .limit(1)
         .maybeSingle();
 
