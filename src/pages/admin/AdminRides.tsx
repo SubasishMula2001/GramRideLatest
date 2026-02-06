@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, MapPin, Navigation, Loader2, Car, AlertTriangle, XCircle, Clock } from 'lucide-react';
+import { Search, Filter, MapPin, Navigation, Loader2, Car, AlertTriangle, XCircle, Clock, CheckCircle, UserPlus } from 'lucide-react';
 import AdminLayout from '@/components/AdminLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,6 +19,21 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 import { formatDistanceToNow } from 'date-fns';
 
 interface RideData {
@@ -33,6 +48,13 @@ interface RideData {
   raw_created_at: string;
   user_name: string | null;
   driver_name: string | null;
+  driver_id: string | null;
+}
+
+interface DriverOption {
+  id: string;
+  name: string;
+  vehicle_number: string;
 }
 
 const AdminRides = () => {
@@ -44,6 +66,12 @@ const AdminRides = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [cancellingRide, setCancellingRide] = useState<string | null>(null);
   const [cancellingAll, setCancellingAll] = useState(false);
+  const [completingRide, setCompletingRide] = useState<string | null>(null);
+  const [reassignDialogOpen, setReassignDialogOpen] = useState(false);
+  const [selectedRide, setSelectedRide] = useState<RideData | null>(null);
+  const [availableDrivers, setAvailableDrivers] = useState<DriverOption[]>([]);
+  const [selectedDriverId, setSelectedDriverId] = useState<string>('');
+  const [reassigning, setReassigning] = useState(false);
 
   useEffect(() => {
     // ProtectedRoute already handles auth and role checks
@@ -139,7 +167,8 @@ const AdminRides = () => {
           minute: '2-digit'
         }),
         user_name: ride.user_id ? (profilesMap.get(ride.user_id) || 'Unknown') : 'Unknown',
-        driver_name: ride.driver_id ? (driverUserIdMap.get(ride.driver_id) || null) : null
+        driver_name: ride.driver_id ? (driverUserIdMap.get(ride.driver_id) || null) : null,
+        driver_id: ride.driver_id || null
       }));
 
       setRides(formattedRides);
@@ -148,6 +177,36 @@ const AdminRides = () => {
       toast.error('Failed to load rides');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Fetch available drivers for reassignment
+  const fetchAvailableDrivers = async () => {
+    try {
+      const { data: drivers, error } = await supabase
+        .from('drivers')
+        .select('id, user_id, vehicle_number')
+        .eq('is_verified', true);
+
+      if (error) throw error;
+
+      const userIds = (drivers || []).map(d => d.user_id);
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .in('id', userIds);
+
+      const profileMap = new Map((profiles || []).map(p => [p.id, p.full_name || 'Unknown']));
+
+      const formatted = (drivers || []).map(d => ({
+        id: d.id,
+        name: profileMap.get(d.user_id) || 'Unknown',
+        vehicle_number: d.vehicle_number
+      }));
+
+      setAvailableDrivers(formatted);
+    } catch (error) {
+      console.error('Error fetching drivers:', error);
     }
   };
 
@@ -169,6 +228,68 @@ const AdminRides = () => {
       toast.error('Failed to cancel ride');
     } finally {
       setCancellingRide(null);
+    }
+  };
+
+  // Force complete a ride
+  const handleForceComplete = async (rideId: string) => {
+    setCompletingRide(rideId);
+    try {
+      const { error } = await supabase
+        .from('rides')
+        .update({ 
+          status: 'completed',
+          completed_at: new Date().toISOString(),
+          payment_status: 'completed'
+        })
+        .eq('id', rideId);
+
+      if (error) throw error;
+
+      toast.success('Ride marked as completed');
+      fetchRides();
+    } catch (error) {
+      console.error('Error completing ride:', error);
+      toast.error('Failed to complete ride');
+    } finally {
+      setCompletingRide(null);
+    }
+  };
+
+  // Open reassign dialog
+  const handleOpenReassign = (ride: RideData) => {
+    setSelectedRide(ride);
+    setSelectedDriverId('');
+    fetchAvailableDrivers();
+    setReassignDialogOpen(true);
+  };
+
+  // Reassign driver
+  const handleReassignDriver = async () => {
+    if (!selectedRide || !selectedDriverId) return;
+
+    setReassigning(true);
+    try {
+      const { error } = await supabase
+        .from('rides')
+        .update({ 
+          driver_id: selectedDriverId,
+          status: 'accepted',
+          accepted_at: new Date().toISOString()
+        })
+        .eq('id', selectedRide.id);
+
+      if (error) throw error;
+
+      toast.success('Driver reassigned successfully');
+      setReassignDialogOpen(false);
+      setSelectedRide(null);
+      fetchRides();
+    } catch (error) {
+      console.error('Error reassigning driver:', error);
+      toast.error('Failed to reassign driver');
+    } finally {
+      setReassigning(false);
     }
   };
 
@@ -285,41 +406,86 @@ const AdminRides = () => {
           return <span className="text-muted-foreground text-sm">--</span>;
         }
         return (
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button 
-                size="sm" 
-                variant="outline" 
-                className="text-destructive border-destructive/50 hover:bg-destructive/10"
-                disabled={cancellingRide === item.id}
-              >
-                {cancellingRide === item.id ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                ) : (
-                  <XCircle className="w-3 h-3 mr-1" />
-                )}
-                Cancel
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Cancel this ride?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This will cancel the ride from {item.pickup_location} to {item.dropoff_location}. 
-                  This action cannot be undone.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Keep Ride</AlertDialogCancel>
-                <AlertDialogAction 
-                  onClick={() => handleCancelRide(item.id)}
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          <div className="flex items-center gap-1">
+            {/* Force Complete */}
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="text-primary border-primary/50 hover:bg-primary/10"
+                  disabled={completingRide === item.id}
                 >
-                  Cancel Ride
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+                  {completingRide === item.id ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <CheckCircle className="w-3 h-3" />
+                  )}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Force complete this ride?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will mark the ride as completed and set payment status to completed.
+                    Use this to fix stuck rides.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => handleForceComplete(item.id)}>
+                    Complete Ride
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Reassign Driver */}
+            <Button 
+              size="sm" 
+              variant="outline" 
+              className="text-secondary border-secondary/50 hover:bg-secondary/10"
+              onClick={() => handleOpenReassign(item)}
+            >
+              <UserPlus className="w-3 h-3" />
+            </Button>
+
+            {/* Cancel Ride */}
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="text-destructive border-destructive/50 hover:bg-destructive/10"
+                  disabled={cancellingRide === item.id}
+                >
+                  {cancellingRide === item.id ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <XCircle className="w-3 h-3" />
+                  )}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Cancel this ride?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will cancel the ride from {item.pickup_location} to {item.dropoff_location}. 
+                    This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Keep Ride</AlertDialogCancel>
+                  <AlertDialogAction 
+                    onClick={() => handleCancelRide(item.id)}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    Cancel Ride
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
         );
       }
     },
@@ -341,6 +507,48 @@ const AdminRides = () => {
   return (
     <AdminLayout>
       <div>
+        {/* Reassign Driver Dialog */}
+        <Dialog open={reassignDialogOpen} onOpenChange={setReassignDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Reassign Driver</DialogTitle>
+              <DialogDescription>
+                Select a driver to assign to this ride
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 mt-4">
+              <div className="space-y-2">
+                <Label>Select Driver</Label>
+                <Select value={selectedDriverId} onValueChange={setSelectedDriverId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose a driver" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableDrivers.map(driver => (
+                      <SelectItem key={driver.id} value={driver.id}>
+                        {driver.name} ({driver.vehicle_number})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex gap-3 pt-4">
+                <Button variant="outline" className="flex-1" onClick={() => setReassignDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button 
+                  variant="hero" 
+                  className="flex-1" 
+                  onClick={handleReassignDriver}
+                  disabled={reassigning || !selectedDriverId}
+                >
+                  {reassigning ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Assign Driver'}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
