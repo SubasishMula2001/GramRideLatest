@@ -129,6 +129,13 @@ export type Database = {
             foreignKeyName: "driver_payouts_driver_id_fkey"
             columns: ["driver_id"]
             isOneToOne: false
+            referencedRelation: "driver_ride_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "driver_payouts_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
             referencedRelation: "drivers"
             referencedColumns: ["id"]
           },
@@ -243,6 +250,13 @@ export type Database = {
             columns: ["driver_id"]
             isOneToOne: false
             referencedRelation: "available_drivers_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "driver_ride_info"
             referencedColumns: ["id"]
           },
           {
@@ -433,6 +447,13 @@ export type Database = {
             foreignKeyName: "ratings_driver_id_fkey"
             columns: ["driver_id"]
             isOneToOne: false
+            referencedRelation: "driver_ride_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ratings_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
             referencedRelation: "drivers"
             referencedColumns: ["id"]
           },
@@ -566,6 +587,13 @@ export type Database = {
             foreignKeyName: "rides_driver_id_fkey"
             columns: ["driver_id"]
             isOneToOne: false
+            referencedRelation: "driver_ride_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rides_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
             referencedRelation: "drivers"
             referencedColumns: ["id"]
           },
@@ -680,6 +708,13 @@ export type Database = {
             foreignKeyName: "shared_rides_driver_id_fkey"
             columns: ["driver_id"]
             isOneToOne: false
+            referencedRelation: "driver_ride_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shared_rides_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
             referencedRelation: "drivers"
             referencedColumns: ["id"]
           },
@@ -732,6 +767,48 @@ export type Database = {
         }
         Relationships: []
       }
+      driver_ride_info: {
+        Row: {
+          approx_lat: number | null
+          approx_lng: number | null
+          created_at: string | null
+          id: string | null
+          is_available: boolean | null
+          is_verified: boolean | null
+          rating: number | null
+          updated_at: string | null
+          user_id: string | null
+          vehicle_number: string | null
+          vehicle_type: string | null
+        }
+        Insert: {
+          approx_lat?: never
+          approx_lng?: never
+          created_at?: string | null
+          id?: string | null
+          is_available?: boolean | null
+          is_verified?: boolean | null
+          rating?: number | null
+          updated_at?: string | null
+          user_id?: string | null
+          vehicle_number?: string | null
+          vehicle_type?: string | null
+        }
+        Update: {
+          approx_lat?: never
+          approx_lng?: never
+          created_at?: string | null
+          id?: string | null
+          is_available?: boolean | null
+          is_verified?: boolean | null
+          rating?: number | null
+          updated_at?: string | null
+          user_id?: string | null
+          vehicle_number?: string | null
+          vehicle_type?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       accept_ride: {
@@ -753,6 +830,10 @@ export type Database = {
       }
       is_verified_available_driver: { Args: never; Returns: boolean }
       is_verified_driver: { Args: never; Returns: boolean }
+      user_has_active_ride_with_driver: {
+        Args: { _driver_id: string }
+        Returns: boolean
+      }
       validate_promo_code: {
         Args: { _code: string; _fare: number; _user_id: string }
         Returns: {
