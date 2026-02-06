@@ -140,13 +140,13 @@ const DriverDashboard = () => {
     
     if (user) {
       fetchDriverData();
-      fetchActiveRide();
     }
   }, [user, authLoading]);
 
-  // Fetch pending payment rides when driverData is available
+  // Fetch active ride and pending payment rides when driverData is available
   useEffect(() => {
     if (driverData) {
+      fetchActiveRide();
       fetchPendingPaymentRides();
     }
   }, [driverData]);
