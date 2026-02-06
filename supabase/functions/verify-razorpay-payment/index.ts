@@ -8,28 +8,6 @@ interface VerifyPaymentRequest {
   razorpay_signature: string;
 }
 
-// Decode JWT to extract user ID (handles URL-safe Base64)
-function decodeJwt(token: string): { sub?: string } | null {
-  try {
-    const parts = token.split('.');
-    if (parts.length !== 3) {
-      console.error('JWT has invalid number of parts:', parts.length);
-      return null;
-    }
-    // Handle URL-safe Base64 encoding
-    let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-    // Add padding if necessary
-    while (base64.length % 4) {
-      base64 += '=';
-    }
-    const payload = JSON.parse(atob(base64));
-    return payload;
-  } catch (err) {
-    console.error('JWT decode error:', err);
-    return null;
-  }
-}
-
 // HMAC SHA256 signature verification
 async function verifySignature(
   orderId: string,
@@ -74,17 +52,24 @@ Deno.serve(async (req) => {
 
     const token = authHeader.replace('Bearer ', '');
     
-    // Decode token to get user ID
-    const payload = decodeJwt(token);
-    if (!payload?.sub) {
-      console.error('Invalid token payload');
+    // Create supabase client with auth header for proper JWT verification
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_ANON_KEY')!,
+      { global: { headers: { Authorization: authHeader } } }
+    );
+
+    // Verify JWT using getClaims - this cryptographically validates the token
+    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims?.sub) {
+      console.error('JWT verification failed:', claimsError);
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const userId = payload.sub;
+    const userId = claimsData.claims.sub as string;
     console.log('Authenticated user:', userId);
     
     // Create admin client for database operations
