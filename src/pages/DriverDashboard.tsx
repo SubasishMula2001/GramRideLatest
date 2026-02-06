@@ -145,11 +145,93 @@ const DriverDashboard = () => {
 
   // Fetch active ride and pending payment rides when driverData is available
   useEffect(() => {
-    if (driverData) {
-      fetchActiveRide();
+    const loadActiveRide = async () => {
+      if (!driverData?.id) return;
+
+      console.log('Fetching active ride for driver:', driverData.id);
+      
+      try {
+        const { data, error } = await supabase
+          .from('rides')
+          .select(`
+            id,
+            ride_type,
+            pickup_location,
+            dropoff_location,
+            fare,
+            distance_km,
+            status,
+            user_id,
+            pickup_lat,
+            pickup_lng,
+            dropoff_lat,
+            dropoff_lng,
+            otp,
+            payment_method
+          `)
+          .eq('driver_id', driverData.id)
+          .in('status', ['accepted', 'in_progress'])
+          .maybeSingle();
+
+        console.log('Active ride query result:', { data, error });
+
+        if (error) {
+          console.error('Error fetching active ride:', error);
+          return;
+        }
+
+        if (data) {
+          // Fetch user profile separately
+          let userName = 'Customer';
+          let userPhone: string | null = null;
+          if (data.user_id) {
+            const { data: profileData } = await supabase
+              .from('profiles')
+              .select('full_name, phone')
+              .eq('id', data.user_id)
+              .maybeSingle();
+            
+            if (profileData?.full_name) {
+              userName = profileData.full_name;
+            }
+            if (profileData?.phone) {
+              userPhone = profileData.phone;
+            }
+          }
+
+          console.log('Setting active ride:', data.id, data.status);
+          
+          setActiveRide({
+            id: data.id,
+            ride_type: data.ride_type,
+            pickup_location: data.pickup_location,
+            dropoff_location: data.dropoff_location,
+            fare: data.fare || 0,
+            distance_km: data.distance_km || 0,
+            status: data.status as 'accepted' | 'in_progress',
+            user_name: userName,
+            user_phone: userPhone,
+            pickup_lat: data.pickup_lat,
+            pickup_lng: data.pickup_lng,
+            dropoff_lat: data.dropoff_lat,
+            dropoff_lng: data.dropoff_lng,
+            otp: data.otp || undefined,
+            payment_method: data.payment_method as 'upi' | 'cash' | null
+          });
+        } else {
+          console.log('No active ride found for driver');
+          setActiveRide(null);
+        }
+      } catch (error) {
+        console.error('Error in loadActiveRide:', error);
+      }
+    };
+
+    if (driverData?.id) {
+      loadActiveRide();
       fetchPendingPaymentRides();
     }
-  }, [driverData]);
+  }, [driverData?.id]);
 
   // Subscribe to pending rides when online
   useEffect(() => {
