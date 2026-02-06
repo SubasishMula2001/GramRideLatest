@@ -35,6 +35,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>(null);
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('idle');
   const [isLoading, setIsLoading] = useState(false);
+  const [transactionId, setTransactionId] = useState<string | null>(null);
   const { toast } = useToast();
   const { t } = useLanguage();
 
@@ -118,6 +119,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
               throw new Error(verifyError?.message || 'Payment verification failed');
             }
 
+            setTransactionId(response.razorpay_payment_id);
             setPaymentStatus('success');
             toast({
               title: 'Payment Successful! ✅',
@@ -127,7 +129,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
             setTimeout(() => {
               onPaymentComplete();
               onClose();
-            }, 2000);
+            }, 3000);
           } catch (err) {
             console.error('Verification error:', err);
             setPaymentStatus('failed');
@@ -222,6 +224,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     setSelectedMethod(null);
     setPaymentStatus('idle');
     setIsLoading(false);
+    setTransactionId(null);
   };
 
   const handleClose = () => {
@@ -257,11 +260,37 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
 
           {/* Payment Status */}
           {paymentStatus === 'success' && (
-            <div className="flex flex-col items-center gap-2 py-6">
+            <div className="flex flex-col items-center gap-3 py-6">
               <CheckCircle className="h-16 w-16 text-green-500 animate-pulse" />
               <p className="text-lg font-semibold text-green-600">
                 {t.signIn === 'লগইন করুন' ? 'পেমেন্ট সফল!' : 'Payment Successful!'}
               </p>
+              <div className="w-full bg-muted/50 rounded-lg p-3 space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">
+                    {t.signIn === 'লগইন করুন' ? 'টাকা' : 'Amount'}
+                  </span>
+                  <span className="font-semibold text-primary">₹{amount}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">
+                    {t.signIn === 'লগইন করুন' ? 'পদ্ধতি' : 'Method'}
+                  </span>
+                  <span className="font-medium">
+                    {selectedMethod === 'upi' ? 'UPI' : (t.signIn === 'লগইন করুন' ? 'নগদ' : 'Cash')}
+                  </span>
+                </div>
+                {transactionId && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">
+                      {t.signIn === 'লগইন করুন' ? 'ট্রানজাকশন আইডি' : 'Transaction ID'}
+                    </span>
+                    <span className="font-mono text-xs bg-background px-2 py-0.5 rounded">
+                      {transactionId.slice(0, 16)}...
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
