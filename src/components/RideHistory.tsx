@@ -1,7 +1,10 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { MapPin, Navigation, Clock, IndianRupee, Package, Users, Loader2 } from 'lucide-react';
+import { MapPin, Navigation, Clock, IndianRupee, Package, Users, Loader2, Play } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
+import { Button } from './ui/button';
+import { toast } from 'sonner';
 
 interface Ride {
   id: string;
@@ -21,9 +24,26 @@ interface RideHistoryProps {
 }
 
 const RideHistory: React.FC<RideHistoryProps> = ({ userId, userType }) => {
+  const navigate = useNavigate();
   const [rides, setRides] = useState<Ride[]>([]);
   const [loading, setLoading] = useState(true);
   const [driverId, setDriverId] = useState<string | null>(null);
+
+  // Check if a ride is incomplete (can be resumed)
+  const isIncompleteRide = (status: string) => {
+    return ['pending', 'accepted', 'in_progress'].includes(status);
+  };
+
+  // Handle resuming an incomplete ride
+  const handleResumeRide = (ride: Ride) => {
+    if (userType === 'driver') {
+      toast.info('Returning to dashboard with active ride...');
+      navigate('/driver');
+    } else {
+      toast.info('Returning to booking with active ride...');
+      navigate('/book', { state: { pendingRideId: ride.id } });
+    }
+  };
 
   const fetchRides = useCallback(async () => {
     try {
@@ -106,7 +126,9 @@ const RideHistory: React.FC<RideHistoryProps> = ({ userId, userType }) => {
       case 'completed':
         return 'bg-primary/10 text-primary';
       case 'in_progress':
-        return 'bg-secondary/10 text-secondary';
+        return 'bg-amber-500/10 text-amber-600 dark:text-amber-400';
+      case 'accepted':
+        return 'bg-blue-500/10 text-blue-600 dark:text-blue-400';
       case 'pending':
         return 'bg-muted text-muted-foreground';
       case 'cancelled':
@@ -151,7 +173,11 @@ const RideHistory: React.FC<RideHistoryProps> = ({ userId, userType }) => {
         {rides.map((ride) => (
           <div 
             key={ride.id} 
-            className="border border-border/30 rounded-xl p-4 bg-background/50 hover:bg-background/80 transition-colors"
+            className={`border rounded-xl p-4 transition-colors ${
+              isIncompleteRide(ride.status) 
+                ? 'border-amber-500/50 bg-amber-500/5 hover:bg-amber-500/10' 
+                : 'border-border/30 bg-background/50 hover:bg-background/80'
+            }`}
           >
             <div className="flex items-start justify-between mb-3">
               <div className="flex items-center gap-2">
@@ -202,6 +228,21 @@ const RideHistory: React.FC<RideHistoryProps> = ({ userId, userType }) => {
                 {format(new Date(ride.created_at), 'dd MMM, hh:mm a')}
               </span>
             </div>
+
+            {/* Resume button for incomplete rides */}
+            {isIncompleteRide(ride.status) && (
+              <div className="mt-3 pt-3 border-t border-border/30">
+                <Button 
+                  size="sm" 
+                  variant="outline"
+                  className="w-full border-amber-500/50 text-amber-600 hover:bg-amber-500/10 hover:text-amber-700"
+                  onClick={() => handleResumeRide(ride)}
+                >
+                  <Play className="w-4 h-4 mr-2" />
+                  Resume Ride
+                </Button>
+              </div>
+            )}
           </div>
         ))}
       </div>
