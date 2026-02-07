@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { logActivity } from '@/hooks/useActivityLog';
 
 interface AuthContextType {
   user: User | null;
@@ -102,10 +103,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
+    
+    // Log successful login
+    if (!error && data?.user) {
+      logActivity({
+        userId: data.user.id,
+        action: 'User Login',
+        details: { method: 'email', email }
+      });
+    }
     
     return { error: error as Error | null };
   };
@@ -119,16 +129,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const verifyPhoneOtp = async (phone: string, token: string) => {
-    const { error } = await supabase.auth.verifyOtp({
+    const { data, error } = await supabase.auth.verifyOtp({
       phone,
       token,
       type: 'sms',
     });
     
+    // Log successful phone login
+    if (!error && data?.user) {
+      logActivity({
+        userId: data.user.id,
+        action: 'User Login',
+        details: { method: 'phone', phone }
+      });
+    }
+    
     return { error: error as Error | null };
   };
 
   const signOut = async () => {
+    // Log logout before clearing state
+    if (user) {
+      await logActivity({
+        userId: user.id,
+        action: 'User Logout',
+        details: { email: user.email }
+      });
+    }
+    
     try {
       await supabase.auth.signOut();
     } catch (error) {

@@ -341,9 +341,10 @@ const BookRide = () => {
       setStep('searching');
       toast.success('Booking created! Finding a driver...');
 
-      // Log the activity
-      await supabase.from('activity_logs').insert({
-        user_id: user.id,
+      // Log the activity with device info
+      const { logActivity } = await import('@/hooks/useActivityLog');
+      await logActivity({
+        userId: user.id,
         action: 'Ride Booked',
         details: { 
           ride_id: data.id, 
