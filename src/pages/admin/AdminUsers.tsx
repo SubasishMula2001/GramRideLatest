@@ -248,6 +248,37 @@ const AdminUsers = () => {
           .eq('user_id', editingUser.id);
 
         if (roleError) throw roleError;
+
+        // If changing to driver, create a driver record if it doesn't exist
+        if (editForm.role === 'driver') {
+          // Check if driver record already exists
+          const { data: existingDriver } = await supabase
+            .from('drivers')
+            .select('id')
+            .eq('user_id', editingUser.id)
+            .maybeSingle();
+
+          if (!existingDriver) {
+            // Create a placeholder driver record - admin will need to update vehicle details
+            const { error: driverError } = await supabase
+              .from('drivers')
+              .insert({
+                user_id: editingUser.id,
+                vehicle_number: 'PENDING',
+                vehicle_type: 'toto',
+                license_number: 'PENDING',
+                is_verified: false,
+                is_available: false
+              });
+
+            if (driverError) {
+              console.error('Error creating driver record:', driverError);
+              toast.warning('Role updated but driver record needs to be completed in Drivers section');
+            } else {
+              toast.info('Driver record created - please update vehicle details in Drivers section');
+            }
+          }
+        }
       }
 
       toast.success('User updated successfully');
