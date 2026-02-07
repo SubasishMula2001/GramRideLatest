@@ -478,12 +478,15 @@ const DriverDashboard = () => {
         setPendingRides([]);
       }
 
-      // Log activity
-      await supabase.from('activity_logs').insert({
-        user_id: user?.id,
-        action: newStatus ? 'Driver went online' : 'Driver went offline',
-        details: { driver_id: driverData.id }
-      });
+      // Log activity with device info
+      if (user?.id) {
+        const { logActivity } = await import('@/hooks/useActivityLog');
+        await logActivity({
+          userId: user.id,
+          action: newStatus ? 'Driver went online' : 'Driver went offline',
+          details: { driver_id: driverData.id }
+        });
+      }
 
     } catch (error) {
       console.error('Error updating status:', error);
@@ -579,12 +582,15 @@ const DriverDashboard = () => {
         .update({ total_rides: (driverData.total_rides || 0) + 1 })
         .eq('id', driverData.id);
 
-      // Log activity
-      await supabase.from('activity_logs').insert({
-        user_id: user?.id,
-        action: 'Ride Accepted',
-        details: { ride_id: rideId, driver_id: driverData.id }
-      });
+      // Log activity with device info
+      if (user?.id) {
+        const { logActivity } = await import('@/hooks/useActivityLog');
+        await logActivity({
+          userId: user.id,
+          action: 'Ride Accepted',
+          details: { ride_id: rideId, driver_id: driverData.id }
+        });
+      }
 
     } catch (error) {
       console.error('Error accepting ride:', error);
@@ -617,11 +623,15 @@ const DriverDashboard = () => {
       setOtpError(false);
       toast.success('Ride started!');
 
-      await supabase.from('activity_logs').insert({
-        user_id: user?.id,
-        action: 'Ride Started',
-        details: { ride_id: activeRide.id, driver_id: driverData.id }
-      });
+      // Log activity with device info
+      if (user?.id) {
+        const { logActivity } = await import('@/hooks/useActivityLog');
+        await logActivity({
+          userId: user.id,
+          action: 'Ride Started',
+          details: { ride_id: activeRide.id, driver_id: driverData.id }
+        });
+      }
     } catch (error) {
       console.error('Error starting ride:', error);
       toast.error('Failed to start ride');
@@ -700,17 +710,21 @@ const DriverDashboard = () => {
       // Refresh driver data
       fetchDriverData();
 
-      await supabase.from('activity_logs').insert({
-        user_id: user?.id,
-        action: paymentReceived ? 'Ride Completed with Payment' : 'Ride Completed - Payment Pending',
-        details: { 
-          ride_id: rideId, 
-          driver_id: driverData.id, 
-          fare,
-          payment_method: selectedPaymentConfirm,
-          payment_received: paymentReceived
-        }
-      });
+      // Log activity with device info
+      if (user?.id) {
+        const { logActivity } = await import('@/hooks/useActivityLog');
+        await logActivity({
+          userId: user.id,
+          action: paymentReceived ? 'Ride Completed with Payment' : 'Ride Completed - Payment Pending',
+          details: { 
+            ride_id: rideId, 
+            driver_id: driverData.id, 
+            fare,
+            payment_method: selectedPaymentConfirm,
+            payment_received: paymentReceived
+          }
+        });
+      }
     } catch (error) {
       console.error('Error finishing ride:', error);
       toast.error('Failed to complete ride');
@@ -769,16 +783,20 @@ const DriverDashboard = () => {
       setPendingPaymentRides(prev => prev.filter(r => r.id !== paymentContext.rideId));
       fetchDriverData();
 
-      await supabase.from('activity_logs').insert({
-        user_id: user?.id,
-        action: 'Pending Payment Collected',
-        details: { 
-          ride_id: paymentContext.rideId, 
-          driver_id: driverData.id, 
-          fare: paymentContext.fare,
-          payment_method: selectedPaymentConfirm
-        }
-      });
+      // Log activity with device info
+      if (user?.id) {
+        const { logActivity } = await import('@/hooks/useActivityLog');
+        await logActivity({
+          userId: user.id,
+          action: 'Pending Payment Collected',
+          details: { 
+            ride_id: paymentContext.rideId, 
+            driver_id: driverData.id, 
+            fare: paymentContext.fare,
+            payment_method: selectedPaymentConfirm
+          }
+        });
+      }
     } catch (error) {
       console.error('Error collecting payment:', error);
       toast.error('Failed to process payment');
