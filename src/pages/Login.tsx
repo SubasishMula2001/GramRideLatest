@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Mail, Lock, ArrowRight, User, Car, Loader2, Home } from 'lucide-react';
+import { Mail, Lock, ArrowRight, User, Car, Loader2, Home, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import GramRideLogo from '@/components/GramRideLogo';
@@ -33,6 +33,7 @@ const Login = () => {
   const [fullName, setFullName] = useState('');
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string; fullName?: string }>({});
+  const [showPassword, setShowPassword] = useState(false);
 
   // Demo credentials - only available in development + preview environments.
   // Keep this disabled on published URLs.
@@ -324,13 +325,21 @@ const Login = () => {
                 <div className="relative">
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-6 h-6 text-muted-foreground" />
                   <Input
-                    type="password"
+                    type={showPassword ? "text" : "password"}
                     placeholder={t.password}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="pl-14 h-14 text-lg rounded-xl border-2"
+                    className="pl-14 pr-14 h-14 text-lg rounded-xl border-2"
                     disabled={loading}
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff className="w-6 h-6" /> : <Eye className="w-6 h-6" />}
+                  </button>
                 </div>
                 {errors.password && (
                   <p className="text-destructive text-base mt-2">{errors.password}</p>
