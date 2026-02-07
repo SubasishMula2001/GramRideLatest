@@ -163,7 +163,9 @@ const Login = () => {
         
         toast.success(t.welcomeMessage);
       } else {
-        const { error } = await signUp(email, password, fullName);
+        // Only allow signup as 'user' or 'driver' - admin requires manual assignment
+        const signupRole = userType === 'driver' ? 'driver' : 'user';
+        const { error } = await signUp(email, password, fullName, signupRole);
         
         if (error) {
           toast.error(error.message);
