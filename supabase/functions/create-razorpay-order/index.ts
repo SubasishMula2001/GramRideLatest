@@ -33,8 +33,8 @@ Deno.serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     );
 
-    // Verify JWT using getUser for server-side token verification
-    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    // Verify JWT using getUser - client already has Authorization header
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) {
       console.error('JWT verification failed:', userError);
       return new Response(
