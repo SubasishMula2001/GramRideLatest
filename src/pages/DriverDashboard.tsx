@@ -96,6 +96,8 @@ type PaymentContext = {
   rideId: string;
   fare: number;
   existingPaymentMethod?: 'upi' | 'cash' | null;
+  upiPaymentCompleted?: boolean;
+  upiTransactionId?: string | null;
 };
 
 interface DriverData {
@@ -638,16 +640,45 @@ const DriverDashboard = () => {
     }
   };
 
-  const handleFinishRide = () => {
+  const handleFinishRide = async () => {
     if (!activeRide) return;
+    
+    // Check if UPI payment was already completed for this ride
+    let upiPaymentCompleted = false;
+    let upiTransactionId: string | null = null;
+    
+    try {
+      const { data: paymentData } = await supabase
+        .from('payments')
+        .select('payment_status, razorpay_payment_id, payment_method')
+        .eq('ride_id', activeRide.id)
+        .eq('payment_status', 'completed')
+        .eq('payment_method', 'upi')
+        .maybeSingle();
+      
+      if (paymentData) {
+        upiPaymentCompleted = true;
+        upiTransactionId = paymentData.razorpay_payment_id;
+      }
+    } catch (error) {
+      console.error('Error checking payment status:', error);
+    }
+    
     // Snapshot the ride so modal keeps working even if activeRide becomes null (e.g. status changes quickly)
     setPaymentContext({
       rideId: activeRide.id,
       fare: activeRide.fare,
       existingPaymentMethod: activeRide.payment_method,
+      upiPaymentCompleted,
+      upiTransactionId,
     });
 
-    setSelectedPaymentConfirm((activeRide.payment_method || 'cash') as PaymentConfirmMethod);
+    // If UPI payment already completed, default to UPI
+    if (upiPaymentCompleted) {
+      setSelectedPaymentConfirm('upi');
+    } else {
+      setSelectedPaymentConfirm((activeRide.payment_method || 'cash') as PaymentConfirmMethod);
+    }
     setShowPaymentConfirmModal(true);
   };
 
@@ -1252,6 +1283,29 @@ const DriverDashboard = () => {
           </DialogHeader>
 
           <div className="space-y-4">
+            {/* UPI Payment Already Completed Banner */}
+            {paymentContext?.upiPaymentCompleted && (
+              <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="p-2 rounded-full bg-green-500/20">
+                    <CheckCircle className="w-5 h-5 text-green-600" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-green-700">Payment Completed via UPI</p>
+                    <p className="text-sm text-green-600">Customer has already paid online</p>
+                  </div>
+                </div>
+                {paymentContext.upiTransactionId && (
+                  <div className="mt-3 bg-white/50 rounded-lg p-3">
+                    <p className="text-xs text-muted-foreground">Transaction Reference</p>
+                    <p className="font-mono text-sm font-medium text-foreground break-all">
+                      {paymentContext.upiTransactionId}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Amount Display */}
             <div className="text-center py-4 rounded-lg bg-gradient-to-r from-primary/10 to-green-500/10">
               <p className="text-sm text-muted-foreground">Total Fare</p>
@@ -1259,46 +1313,51 @@ const DriverDashboard = () => {
                 <IndianRupee className="w-7 h-7" />
                   {paymentFare}
               </p>
+              {paymentContext?.upiPaymentCompleted && (
+                <p className="text-sm text-green-600 mt-1 font-medium">✓ Already Paid</p>
+              )}
             </div>
 
-            {/* Payment Method Selection */}
-            <div>
-              <p className="text-sm font-medium text-foreground mb-3">How did you receive payment?</p>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setSelectedPaymentConfirm('cash')}
-                  className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 ${
-                    selectedPaymentConfirm === 'cash'
-                      ? 'border-primary bg-primary/10'
-                      : 'border-border hover:border-primary/50 bg-muted/30'
-                  }`}
-                >
-                  <div className={`p-2 rounded-full ${selectedPaymentConfirm === 'cash' ? 'bg-primary/20' : 'bg-muted'}`}>
-                    <Banknote className={`w-5 h-5 ${selectedPaymentConfirm === 'cash' ? 'text-primary' : 'text-muted-foreground'}`} />
-                  </div>
-                  <span className={`font-medium text-sm ${selectedPaymentConfirm === 'cash' ? 'text-primary' : 'text-foreground'}`}>
-                    Cash
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedPaymentConfirm('upi')}
-                  className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 ${
-                    selectedPaymentConfirm === 'upi'
-                      ? 'border-primary bg-primary/10'
-                      : 'border-border hover:border-primary/50 bg-muted/30'
-                  }`}
-                >
-                  <div className={`p-2 rounded-full ${selectedPaymentConfirm === 'upi' ? 'bg-primary/20' : 'bg-muted'}`}>
-                    <Smartphone className={`w-5 h-5 ${selectedPaymentConfirm === 'upi' ? 'text-primary' : 'text-muted-foreground'}`} />
-                  </div>
-                  <span className={`font-medium text-sm ${selectedPaymentConfirm === 'upi' ? 'text-primary' : 'text-foreground'}`}>
-                    UPI
-                  </span>
-                </button>
+            {/* Payment Method Selection - Only show if UPI not already completed */}
+            {!paymentContext?.upiPaymentCompleted && (
+              <div>
+                <p className="text-sm font-medium text-foreground mb-3">How did you receive payment?</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPaymentConfirm('cash')}
+                    className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 ${
+                      selectedPaymentConfirm === 'cash'
+                        ? 'border-primary bg-primary/10'
+                        : 'border-border hover:border-primary/50 bg-muted/30'
+                    }`}
+                  >
+                    <div className={`p-2 rounded-full ${selectedPaymentConfirm === 'cash' ? 'bg-primary/20' : 'bg-muted'}`}>
+                      <Banknote className={`w-5 h-5 ${selectedPaymentConfirm === 'cash' ? 'text-primary' : 'text-muted-foreground'}`} />
+                    </div>
+                    <span className={`font-medium text-sm ${selectedPaymentConfirm === 'cash' ? 'text-primary' : 'text-foreground'}`}>
+                      Cash
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPaymentConfirm('upi')}
+                    className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 ${
+                      selectedPaymentConfirm === 'upi'
+                        ? 'border-primary bg-primary/10'
+                        : 'border-border hover:border-primary/50 bg-muted/30'
+                    }`}
+                  >
+                    <div className={`p-2 rounded-full ${selectedPaymentConfirm === 'upi' ? 'bg-primary/20' : 'bg-muted'}`}>
+                      <Smartphone className={`w-5 h-5 ${selectedPaymentConfirm === 'upi' ? 'text-primary' : 'text-muted-foreground'}`} />
+                    </div>
+                    <span className={`font-medium text-sm ${selectedPaymentConfirm === 'upi' ? 'text-primary' : 'text-foreground'}`}>
+                      UPI
+                    </span>
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Confirm Payment Button */}
             <Button
@@ -1321,12 +1380,14 @@ const DriverDashboard = () => {
               )}
               {processingPayment 
                 ? 'Processing...' 
-                : `Yes, Received ₹${paymentFare} via ${selectedPaymentConfirm === 'upi' ? 'UPI' : 'Cash'}`
+                : paymentContext?.upiPaymentCompleted
+                  ? 'Complete Ride (UPI Already Paid)'
+                  : `Yes, Received ₹${paymentFare} via ${selectedPaymentConfirm === 'upi' ? 'UPI' : 'Cash'}`
               }
             </Button>
 
-            {/* Not Paid Button - Only show when ending active ride */}
-            {activeRide && (
+            {/* Not Paid Button - Only show when ending active ride and UPI not already completed */}
+            {activeRide && !paymentContext?.upiPaymentCompleted && (
               <Button
                 variant="outline"
                 className="w-full border-destructive/50 text-destructive hover:bg-destructive/10"
