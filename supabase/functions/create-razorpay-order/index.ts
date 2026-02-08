@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.89.0';
 import { getCorsHeaders, handleCorsPreflightRequest } from '../_shared/cors.ts';
 
 interface CreateOrderRequest {
@@ -33,17 +33,18 @@ Deno.serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     );
 
-    // Verify JWT using getUser - client already has Authorization header
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError || !user) {
-      console.error('JWT verification failed:', userError);
+    // Verify JWT via claims (does not depend on a server-side session row)
+    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
+    const userId = claimsData?.claims?.sub;
+
+    if (claimsError || !userId) {
+      console.error('JWT verification failed:', claimsError);
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const userId = user.id;
     console.log('Authenticated user:', userId);
 
     const { ride_id, amount }: CreateOrderRequest = await req.json();
