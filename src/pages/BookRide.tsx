@@ -261,30 +261,48 @@ const BookRide = () => {
 
   const fetchDriverInfo = async (driverId: string) => {
     try {
-      const { data: driver, error: driverError } = await supabase
-        .from('drivers')
-        .select('id, vehicle_number, vehicle_type, rating, user_id')
-        .eq('id', driverId)
-        .single();
-
-      if (driverError) throw driverError;
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('full_name, phone')
-        .eq('id', driver.user_id)
+      // Use the secure view which masks phone and provides only necessary data
+      const { data: driverProfile, error } = await supabase
+        .from('driver_profile_for_ride')
+        .select('*')
+        .eq('driver_id', driverId)
         .maybeSingle();
 
-      setDriverInfo({
-        id: driver.id,
-        name: profile?.full_name || 'Driver',
-        phone: profile?.phone || null,
-        vehicle_number: driver.vehicle_number,
-        vehicle_type: driver.vehicle_type || 'Toto',
-        rating: driver.rating || 5.0
-      });
+      if (error) {
+        console.error('Error fetching driver profile:', error);
+      }
+
+      if (driverProfile) {
+        setDriverInfo({
+          id: driverProfile.driver_id || driverId,
+          name: driverProfile.full_name || 'Driver',
+          phone: driverProfile.masked_phone || null,
+          vehicle_number: driverProfile.vehicle_number || '',
+          vehicle_type: driverProfile.vehicle_type || 'Toto',
+          rating: driverProfile.rating || 5.0
+        });
+      } else {
+        // Fallback: set basic info from ride if view returns nothing
+        setDriverInfo({
+          id: driverId,
+          name: 'Driver',
+          phone: null,
+          vehicle_number: '',
+          vehicle_type: 'Toto',
+          rating: 5.0
+        });
+      }
     } catch (error) {
       console.error('Error fetching driver info:', error);
+      // Set fallback driver info
+      setDriverInfo({
+        id: driverId,
+        name: 'Driver',
+        phone: null,
+        vehicle_number: '',
+        vehicle_type: 'Toto',
+        rating: 5.0
+      });
     }
   };
 
