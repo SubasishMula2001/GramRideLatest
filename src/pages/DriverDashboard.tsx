@@ -126,6 +126,7 @@ const DriverDashboard = () => {
   const [selectedPaymentConfirm, setSelectedPaymentConfirm] = useState<PaymentConfirmMethod>('cash');
   const [processingPayment, setProcessingPayment] = useState(false);
   const [paymentContext, setPaymentContext] = useState<PaymentContext | null>(null);
+  const [upiPaidLive, setUpiPaidLive] = useState<{ paid: boolean; transactionId: string | null }>({ paid: false, transactionId: null });
 
   // Track driver location during active rides
   useDriverLocationTracking({
@@ -238,6 +239,56 @@ const DriverDashboard = () => {
       fetchPendingPaymentRides();
     }
   }, [driverData?.id]);
+
+  // Subscribe to payment status changes for active ride
+  useEffect(() => {
+    if (!activeRide?.id) {
+      setUpiPaidLive({ paid: false, transactionId: null });
+      return;
+    }
+
+    // Check existing payment status on mount
+    const checkExistingPayment = async () => {
+      const { data } = await supabase
+        .from('payments')
+        .select('payment_status, razorpay_payment_id, payment_method')
+        .eq('ride_id', activeRide.id)
+        .eq('payment_status', 'completed')
+        .eq('payment_method', 'upi')
+        .maybeSingle();
+      
+      if (data) {
+        setUpiPaidLive({ paid: true, transactionId: data.razorpay_payment_id });
+        toast.success('UPI Payment received from customer! ✅');
+      }
+    };
+    checkExistingPayment();
+
+    // Subscribe to realtime changes
+    const channel = supabase
+      .channel(`payment-status-${activeRide.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'payments',
+          filter: `ride_id=eq.${activeRide.id}`
+        },
+        (payload: any) => {
+          const record = payload.new;
+          if (record?.payment_status === 'completed' && record?.payment_method === 'upi') {
+            setUpiPaidLive({ paid: true, transactionId: record.razorpay_payment_id || null });
+            toast.success('UPI Payment received from customer! ✅');
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [activeRide?.id]);
 
   // Subscribe to pending rides when online
   useEffect(() => {
@@ -643,25 +694,27 @@ const DriverDashboard = () => {
   const handleFinishRide = async () => {
     if (!activeRide) return;
     
-    // Check if UPI payment was already completed for this ride
-    let upiPaymentCompleted = false;
-    let upiTransactionId: string | null = null;
+    // Use live state if available, otherwise check DB
+    let upiPaymentCompleted = upiPaidLive.paid;
+    let upiTransactionId: string | null = upiPaidLive.transactionId;
     
-    try {
-      const { data: paymentData } = await supabase
-        .from('payments')
-        .select('payment_status, razorpay_payment_id, payment_method')
-        .eq('ride_id', activeRide.id)
-        .eq('payment_status', 'completed')
-        .eq('payment_method', 'upi')
-        .maybeSingle();
-      
-      if (paymentData) {
-        upiPaymentCompleted = true;
-        upiTransactionId = paymentData.razorpay_payment_id;
+    if (!upiPaymentCompleted) {
+      try {
+        const { data: paymentData } = await supabase
+          .from('payments')
+          .select('payment_status, razorpay_payment_id, payment_method')
+          .eq('ride_id', activeRide.id)
+          .eq('payment_status', 'completed')
+          .eq('payment_method', 'upi')
+          .maybeSingle();
+        
+        if (paymentData) {
+          upiPaymentCompleted = true;
+          upiTransactionId = paymentData.razorpay_payment_id;
+        }
+      } catch (error) {
+        console.error('Error checking payment status:', error);
       }
-    } catch (error) {
-      console.error('Error checking payment status:', error);
     }
     
     // Snapshot the ride so modal keeps working even if activeRide becomes null (e.g. status changes quickly)
@@ -1035,6 +1088,23 @@ const DriverDashboard = () => {
                     </motion.div>
                   </div>
 
+                  {/* UPI Payment Status Badge */}
+                  {upiPaidLive.paid && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="bg-green-500/10 border border-green-500/30 rounded-xl p-3 flex items-center gap-3"
+                    >
+                      <div className="p-2 rounded-full bg-green-500/20">
+                        <CheckCircle className="w-5 h-5 text-green-600" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-semibold text-green-700 text-sm">UPI Payment Received ✅</p>
+                        <p className="text-xs text-green-600">Customer has paid ₹{activeRide.fare} online</p>
+                      </div>
+                    </motion.div>
+                  )}
+
                   {/* Stats */}
                   <motion.div 
                     className="flex items-center justify-between py-4 px-4 bg-muted/50 rounded-xl"
@@ -1054,6 +1124,15 @@ const DriverDashboard = () => {
                         {activeRide.fare}
                       </p>
                     </div>
+                    {upiPaidLive.paid && (
+                      <>
+                        <div className="w-px h-8 bg-border" />
+                        <div className="text-center">
+                          <p className="text-xs text-muted-foreground">Payment</p>
+                          <p className="font-bold text-green-600 text-sm">UPI ✓</p>
+                        </div>
+                      </>
+                    )}
                   </motion.div>
 
                   {/* Actions */}
@@ -1147,7 +1226,7 @@ const DriverDashboard = () => {
                             onClick={handleFinishRide}
                           >
                             <CheckCircle className="w-4 h-4 mr-2" />
-                            End Ride
+                            {upiPaidLive.paid ? 'Complete Ride (UPI Paid ✅)' : 'End Ride'}
                           </Button>
                         </motion.div>
                       )}
