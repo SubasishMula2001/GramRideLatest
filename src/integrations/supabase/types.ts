@@ -49,6 +49,7 @@ export type Database = {
           created_at: string
           description: string | null
           id: string
+          is_sensitive: boolean
           key: string
           updated_at: string
           value: Json
@@ -57,6 +58,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          is_sensitive?: boolean
           key: string
           updated_at?: string
           value: Json
@@ -65,6 +67,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          is_sensitive?: boolean
           key?: string
           updated_at?: string
           value?: Json

@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.89.0';
 import { getCorsHeaders, handleCorsPreflightRequest } from '../_shared/cors.ts';
+import { getApiKey } from '../_shared/getApiKey.ts';
 
 interface CreateOrderRequest {
   ride_id: string;
@@ -10,12 +11,10 @@ Deno.serve(async (req) => {
   const origin = req.headers.get('origin');
   const corsHeaders = getCorsHeaders(origin);
 
-  // Handle CORS preflight
   const preflightResponse = handleCorsPreflightRequest(req);
   if (preflightResponse) return preflightResponse;
 
   try {
-    // Verify authentication
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return new Response(
@@ -26,14 +25,12 @@ Deno.serve(async (req) => {
 
     const token = authHeader.replace('Bearer ', '');
     
-    // Create supabase client with auth header
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_ANON_KEY')!,
       { global: { headers: { Authorization: authHeader } } }
     );
 
-    // Verify JWT via claims (does not depend on a server-side session row)
     const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
     const userId = claimsData?.claims?.sub;
 
@@ -49,7 +46,6 @@ Deno.serve(async (req) => {
 
     const { ride_id, amount }: CreateOrderRequest = await req.json();
 
-    // Validate input
     if (!ride_id || !amount || amount <= 0) {
       return new Response(
         JSON.stringify({ error: 'Invalid ride_id or amount' }),
@@ -57,7 +53,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Verify the ride belongs to the user
     const { data: ride, error: rideError } = await supabase
       .from('rides')
       .select('id, user_id, fare, status')
@@ -79,9 +74,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Get Razorpay credentials
-    const keyId = Deno.env.get('RAZORPAY_KEY_ID');
-    const keySecret = Deno.env.get('RAZORPAY_KEY_SECRET');
+    // Get Razorpay credentials from DB (with env var fallback)
+    const keyId = await getApiKey('razorpay_key_id');
+    const keySecret = await getApiKey('razorpay_key_secret');
 
     if (!keyId || !keySecret) {
       console.error('Razorpay credentials not configured');
@@ -91,8 +86,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Create Razorpay order
-    const amountInPaise = Math.round(amount * 100); // Convert to paise
+    const amountInPaise = Math.round(amount * 100);
     const orderData = {
       amount: amountInPaise,
       currency: 'INR',
@@ -126,7 +120,6 @@ Deno.serve(async (req) => {
     const razorpayOrder = await razorpayResponse.json();
     console.log('Razorpay order created:', razorpayOrder.id);
 
-    // Create payment record using service role to bypass RLS for insert
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!

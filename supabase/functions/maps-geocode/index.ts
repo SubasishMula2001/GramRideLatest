@@ -1,67 +1,42 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.2";
 import { getCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.ts";
+import { getApiKey } from "../_shared/getApiKey.ts";
 
-// Check if address contains a Plus Code (format like "5MP3+XP5")
 function containsPlusCode(address: string): boolean {
   return /^[A-Z0-9]{4}\+[A-Z0-9]{2,3}/.test(address);
 }
 
-// Find the best human-readable address from geocoding results
 function findBestAddress(results: any[]): { address: string; placeId: string } | null {
   if (!results || results.length === 0) return null;
 
-  // Priority order for address types
   const priorityTypes = [
-    'street_address',
-    'premise',
-    'subpremise',
-    'establishment',
-    'point_of_interest',
-    'neighborhood',
-    'sublocality_level_2',
-    'sublocality_level_1',
-    'sublocality',
-    'locality',
-    'administrative_area_level_3',
-    'administrative_area_level_2',
+    'street_address', 'premise', 'subpremise', 'establishment',
+    'point_of_interest', 'neighborhood', 'sublocality_level_2',
+    'sublocality_level_1', 'sublocality', 'locality',
+    'administrative_area_level_3', 'administrative_area_level_2',
   ];
 
-  // First, try to find an address that doesn't contain a Plus Code
   for (const priorityType of priorityTypes) {
     const result = results.find((r: any) => 
       r.types?.includes(priorityType) && !containsPlusCode(r.formatted_address)
     );
-    if (result) {
-      return { address: result.formatted_address, placeId: result.place_id };
-    }
+    if (result) return { address: result.formatted_address, placeId: result.place_id };
   }
 
-  // If all have Plus Codes, find any result without Plus Code
   const noPlusCodeResult = results.find((r: any) => !containsPlusCode(r.formatted_address));
-  if (noPlusCodeResult) {
-    return { address: noPlusCodeResult.formatted_address, placeId: noPlusCodeResult.place_id };
-  }
+  if (noPlusCodeResult) return { address: noPlusCodeResult.formatted_address, placeId: noPlusCodeResult.place_id };
 
-  // Last resort: use the first result but try to clean the Plus Code
   const firstResult = results[0];
-  let address = cleanPlusCode(firstResult.formatted_address);
-
-  return { address, placeId: firstResult.place_id };
+  return { address: cleanPlusCode(firstResult.formatted_address), placeId: firstResult.place_id };
 }
 
-// Remove Plus Code from any position in the address
 function cleanPlusCode(address: string): string {
-  // Remove Plus Code from the beginning (e.g., "5MP3+XP5, Gundut..." -> "Gundut...")
   let cleaned = address.replace(/^[A-Z0-9]{4}\+[A-Z0-9]{2,3},?\s*/i, '');
-  
-  // Also remove Plus Code if it appears after a comma (e.g., "Area, 5MP3+XP5, City" -> "Area, City")
   cleaned = cleaned.replace(/,?\s*[A-Z0-9]{4}\+[A-Z0-9]{2,3}\s*,?/gi, ',').replace(/,\s*,/g, ',').replace(/^,\s*/, '').replace(/,\s*$/, '');
-  
   return cleaned.trim();
 }
 
-// Verify user authentication using getClaims (works with signing-keys)
 async function verifyAuth(req: Request, corsHeaders: Record<string, string>): Promise<{ userId: string } | Response> {
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
@@ -92,21 +67,17 @@ async function verifyAuth(req: Request, corsHeaders: Record<string, string>): Pr
 }
 
 serve(async (req) => {
-  // Handle CORS preflight
   const corsResponse = handleCorsPreflightRequest(req);
   if (corsResponse) return corsResponse;
 
   const origin = req.headers.get("origin");
   const corsHeaders = getCorsHeaders(origin);
 
-  // Verify authentication
   const authResult = await verifyAuth(req, corsHeaders);
-  if (authResult instanceof Response) {
-    return authResult;
-  }
+  if (authResult instanceof Response) return authResult;
 
   try {
-    const apiKey = Deno.env.get("GOOGLE_MAPS_API_KEY");
+    const apiKey = await getApiKey("google_maps_api_key");
     if (!apiKey) {
       console.error("Google Maps API key not configured");
       return new Response(
@@ -124,7 +95,6 @@ serve(async (req) => {
       );
     }
 
-    // Validate coordinate ranges
     if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
       return new Response(
         JSON.stringify({ error: "Coordinates out of range" }),
@@ -134,7 +104,6 @@ serve(async (req) => {
 
     console.log(`Geocoding request from user ${authResult.userId}: ${lat}, ${lng}`);
 
-    // Request multiple result types to get better addresses
     const response = await fetch(
       `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}&language=en`
     );
@@ -143,7 +112,6 @@ serve(async (req) => {
 
     if (data.status === "OK" && data.results?.length > 0) {
       const best = findBestAddress(data.results);
-      
       if (best) {
         console.log(`Geocoding result: ${best.address.substring(0, 50)}...`);
         return new Response(

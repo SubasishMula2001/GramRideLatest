@@ -1,23 +1,18 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.2";
 import { getCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.ts";
+import { getApiKey } from "../_shared/getApiKey.ts";
 
-// Helper to clean Plus Codes from addresses (e.g., "5MP3+XP5, Location" -> "Location")
 function cleanPlusCode(address: string): string {
   return address
-    // Remove Plus Codes at the start: "5MP3+XP5, " or "5MP3+XP5 "
     .replace(/^[A-Z0-9]{4}\+[A-Z0-9]{2,4},?\s*/i, '')
-    // Remove Plus Codes in the middle: ", 5MP3+XP5," 
     .replace(/,?\s*[A-Z0-9]{4}\+[A-Z0-9]{2,4}\s*,?/gi, ',')
-    // Clean up double commas
     .replace(/,\s*,/g, ',')
-    // Clean up leading/trailing commas and spaces
     .replace(/^,\s*/, '')
     .replace(/,\s*$/, '')
     .trim();
 }
 
-// Verify user authentication using getClaims (works with signing-keys)
 async function verifyAuth(req: Request, corsHeaders: Record<string, string>): Promise<{ userId: string } | Response> {
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
@@ -48,21 +43,17 @@ async function verifyAuth(req: Request, corsHeaders: Record<string, string>): Pr
 }
 
 serve(async (req) => {
-  // Handle CORS preflight
   const corsResponse = handleCorsPreflightRequest(req);
   if (corsResponse) return corsResponse;
 
   const origin = req.headers.get("origin");
   const corsHeaders = getCorsHeaders(origin);
 
-  // Verify authentication
   const authResult = await verifyAuth(req, corsHeaders);
-  if (authResult instanceof Response) {
-    return authResult;
-  }
+  if (authResult instanceof Response) return authResult;
 
   try {
-    const apiKey = Deno.env.get("GOOGLE_MAPS_API_KEY");
+    const apiKey = await getApiKey("google_maps_api_key");
     if (!apiKey) {
       console.error("Google Maps API key not configured");
       return new Response(
@@ -73,7 +64,6 @@ serve(async (req) => {
 
     const { originLat, originLng, destLat, destLng } = await req.json();
 
-    // Validate coordinates
     if (
       typeof originLat !== 'number' || typeof originLng !== 'number' ||
       typeof destLat !== 'number' || typeof destLng !== 'number'
@@ -84,7 +74,6 @@ serve(async (req) => {
       );
     }
 
-    // Validate coordinate ranges
     if (
       originLat < -90 || originLat > 90 || originLng < -180 || originLng > 180 ||
       destLat < -90 || destLat > 90 || destLng < -180 || destLng > 180
@@ -114,15 +103,14 @@ serve(async (req) => {
       const route = data.routes[0];
       const leg = route.legs?.[0];
 
-      // Clean Plus Codes from addresses before returning
       const startAddress = cleanPlusCode(leg?.start_address || '');
       const endAddress = cleanPlusCode(leg?.end_address || '');
 
       return new Response(
         JSON.stringify({
-          distance: leg?.distance?.value || 0, // meters
+          distance: leg?.distance?.value || 0,
           distanceText: leg?.distance?.text || '',
-          duration: leg?.duration?.value || 0, // seconds
+          duration: leg?.duration?.value || 0,
           durationText: leg?.duration?.text || '',
           polyline: route.overview_polyline?.points || '',
           startAddress,

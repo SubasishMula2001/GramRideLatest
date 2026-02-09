@@ -1,7 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.89.0';
 import { getCorsHeaders, handleCorsPreflightRequest } from '../_shared/cors.ts';
+import { getApiKey } from '../_shared/getApiKey.ts';
 
-// Check Razorpay order status and update DB if payment was captured
 Deno.serve(async (req) => {
   const origin = req.headers.get('origin');
   const corsHeaders = getCorsHeaders(origin);
@@ -24,7 +24,6 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    // Get payment record
     const { data: payment, error: paymentError } = await supabaseAdmin
       .from('payments')
       .select('*')
@@ -38,7 +37,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    // If already completed, return immediately
     if (payment.payment_status === 'completed') {
       return new Response(
         JSON.stringify({ 
@@ -50,9 +48,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Query Razorpay for order payments
-    const keyId = Deno.env.get('RAZORPAY_KEY_ID');
-    const keySecret = Deno.env.get('RAZORPAY_KEY_SECRET');
+    // Get keys from DB with env var fallback
+    const keyId = await getApiKey('razorpay_key_id');
+    const keySecret = await getApiKey('razorpay_key_secret');
 
     if (!keyId || !keySecret || !payment.razorpay_order_id) {
       return new Response(
@@ -81,7 +79,6 @@ Deno.serve(async (req) => {
     const paymentsData = await razorpayResponse.json();
     console.log('Razorpay payments for order:', JSON.stringify(paymentsData));
 
-    // Find a captured payment
     const capturedPayment = paymentsData.items?.find(
       (p: any) => p.status === 'captured'
     );
@@ -89,7 +86,6 @@ Deno.serve(async (req) => {
     if (capturedPayment) {
       console.log('Found captured payment:', capturedPayment.id);
 
-      // Update payment record
       await supabaseAdmin
         .from('payments')
         .update({
@@ -99,7 +95,6 @@ Deno.serve(async (req) => {
         })
         .eq('id', payment_id);
 
-      // Update ride payment status
       await supabaseAdmin
         .from('rides')
         .update({
