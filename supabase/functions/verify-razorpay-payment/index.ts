@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.89.0';
 import { getCorsHeaders, handleCorsPreflightRequest } from '../_shared/cors.ts';
+import { getApiKey } from '../_shared/getApiKey.ts';
 
 interface VerifyPaymentRequest {
   payment_id: string;
@@ -8,7 +9,6 @@ interface VerifyPaymentRequest {
   razorpay_signature: string;
 }
 
-// HMAC SHA256 signature verification
 async function verifySignature(
   orderId: string,
   paymentId: string,
@@ -36,12 +36,10 @@ Deno.serve(async (req) => {
   const origin = req.headers.get('origin');
   const corsHeaders = getCorsHeaders(origin);
 
-  // Handle CORS preflight
   const preflightResponse = handleCorsPreflightRequest(req);
   if (preflightResponse) return preflightResponse;
 
   try {
-    // Verify authentication
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return new Response(
@@ -52,14 +50,12 @@ Deno.serve(async (req) => {
 
     const token = authHeader.replace('Bearer ', '');
     
-    // Create supabase client with auth header for proper JWT verification
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_ANON_KEY')!,
       { global: { headers: { Authorization: authHeader } } }
     );
 
-    // Verify JWT via claims (does not depend on a server-side session row)
     const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
     const userId = claimsData?.claims?.sub as string | undefined;
 
@@ -73,7 +69,6 @@ Deno.serve(async (req) => {
 
     console.log('Authenticated user:', userId);
     
-    // Create admin client for database operations
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -86,7 +81,6 @@ Deno.serve(async (req) => {
       razorpay_signature 
     }: VerifyPaymentRequest = await req.json();
 
-    // Validate input
     if (!payment_id || !razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
       return new Response(
         JSON.stringify({ error: 'Missing required fields' }),
@@ -94,7 +88,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Get payment record
     const { data: payment, error: paymentError } = await supabaseAdmin
       .from('payments')
       .select('*')
@@ -123,8 +116,8 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Verify signature
-    const keySecret = Deno.env.get('RAZORPAY_KEY_SECRET');
+    // Get key from DB with env var fallback
+    const keySecret = await getApiKey('razorpay_key_secret');
     if (!keySecret) {
       console.error('Razorpay secret not configured');
       return new Response(
@@ -142,7 +135,6 @@ Deno.serve(async (req) => {
 
     if (!isValid) {
       console.error('Invalid signature');
-      // Update payment as failed
       await supabaseAdmin
         .from('payments')
         .update({
@@ -159,7 +151,6 @@ Deno.serve(async (req) => {
 
     console.log('Payment verified successfully:', razorpay_payment_id);
 
-    // Update payment record
     const { error: updatePaymentError } = await supabaseAdmin
       .from('payments')
       .update({
@@ -174,7 +165,6 @@ Deno.serve(async (req) => {
       console.error('Payment update error:', updatePaymentError);
     }
 
-    // Update ride payment status
     const { error: updateRideError } = await supabaseAdmin
       .from('rides')
       .update({

@@ -1,8 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.2";
 import { getCorsHeaders, handleCorsPreflightRequest } from "../_shared/cors.ts";
+import { getApiKey } from "../_shared/getApiKey.ts";
 
-// Verify user authentication using getClaims (works with signing-keys)
+// Verify user authentication using getClaims
 async function verifyAuth(req: Request, corsHeaders: Record<string, string>): Promise<{ userId: string } | Response> {
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
@@ -33,21 +34,17 @@ async function verifyAuth(req: Request, corsHeaders: Record<string, string>): Pr
 }
 
 serve(async (req) => {
-  // Handle CORS preflight
   const corsResponse = handleCorsPreflightRequest(req);
   if (corsResponse) return corsResponse;
 
   const origin = req.headers.get("origin");
   const corsHeaders = getCorsHeaders(origin);
 
-  // Verify authentication
   const authResult = await verifyAuth(req, corsHeaders);
-  if (authResult instanceof Response) {
-    return authResult;
-  }
+  if (authResult instanceof Response) return authResult;
 
   try {
-    const apiKey = Deno.env.get("GOOGLE_MAPS_API_KEY");
+    const apiKey = await getApiKey("google_maps_api_key");
     if (!apiKey) {
       console.error("Google Maps API key not configured");
       return new Response(
@@ -65,21 +62,17 @@ serve(async (req) => {
       );
     }
 
-    // Sanitize input - remove special characters that could cause issues
     const sanitizedInput = input.replace(/[<>{}]/g, '').substring(0, 200);
-
     console.log(`Autocomplete request from user ${authResult.userId}: "${sanitizedInput.substring(0, 30)}..."`);
 
     const params = new URLSearchParams({
       input: sanitizedInput,
       key: apiKey,
-      components: 'country:in', // Restrict to India
+      components: 'country:in',
       types: 'geocode|establishment',
     });
 
-    if (sessionToken) {
-      params.append('sessiontoken', sessionToken);
-    }
+    if (sessionToken) params.append('sessiontoken', sessionToken);
 
     const response = await fetch(
       `https://maps.googleapis.com/maps/api/place/autocomplete/json?${params}`
