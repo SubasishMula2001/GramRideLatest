@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Mail, Lock, ArrowRight, User, Car, Loader2, Home, Eye, EyeOff } from 'lucide-react';
+import { Mail, Lock, ArrowRight, User, Car, Loader2, Home, Eye, EyeOff, Copy, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import GramRideLogo from '@/components/GramRideLogo';
@@ -9,7 +9,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { toast } from 'sonner';
 import { z } from 'zod';
-import { supabase } from '@/integrations/supabase/client';
 
 type UserType = 'user' | 'driver' | 'admin';
 
@@ -34,62 +33,19 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string; fullName?: string }>({});
   const [showPassword, setShowPassword] = useState(false);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
 
-  // Demo credentials - only available in development + preview environments.
-  // Keep this disabled on published URLs.
-  const [isDemoEnabled, setIsDemoEnabled] = useState(false);
-  
-  useEffect(() => {
-    // Check demo availability on client side to ensure consistent behavior across browsers
-    const hostname = window.location.hostname;
-    const isDevOrPreview =
-      import.meta.env.DEV ||
-      hostname.includes('-preview--') ||
-      hostname.includes('lovableproject.com') ||
-      hostname.includes('lovable.app') ||
-      hostname.includes('localhost') ||
-      hostname.includes('127.0.0.1');
-    setIsDemoEnabled(isDevOrPreview);
-  }, []);
-  
-  const fillDemoCredentials = async () => {
-    if (!isDemoEnabled) {
-      toast.error('Demo credentials are not available in production');
-      return;
-    }
-    
-    setLoading(true);
-    toast.info('Setting up demo accounts...');
-    
-    try {
-      // Call the setup endpoint to ensure demo users exist with correct passwords
-      const { data, error } = await supabase.functions.invoke('setup-demo-users');
-      
-      if (error) {
-        console.error('Setup error:', error);
-        toast.error('Failed to setup demo accounts');
-        setLoading(false);
-        return;
-      }
-      
-      const demoEmails: Record<UserType, string> = {
-        user: 'user@gramride.com',
-        driver: 'driver@gramride.com', 
-        admin: 'admin@gramride.com'
-      };
-      
-      // Use the password returned from the server
-      const demoPassword = data.password || 'Demo@123';
-      setEmail(demoEmails[userType]);
-      setPassword(demoPassword);
-      setIsLogin(true);
-      toast.success(`Demo ${userType} credentials ready. Click login to continue.`);
-    } catch (err) {
-      console.error('Demo setup failed:', err);
-      toast.error('Failed to setup demo credentials');
-    } finally {
-      setLoading(false);
-    }
+  const demoCredentials: Record<UserType, { email: string; password: string }> = {
+    user: { email: 'user@gramride.com', password: 'Demo@123' },
+    driver: { email: 'driver@gramride.com', password: 'Demo@123' },
+    admin: { email: 'admin@gramride.com', password: 'Demo@123' },
+  };
+
+  const copyToClipboard = (text: string, field: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedField(field);
+    toast.success('Copied!');
+    setTimeout(() => setCopiedField(null), 1500);
   };
 
   useEffect(() => {
@@ -252,19 +208,32 @@ const Login = () => {
                 ))}
               </div>
               
-              {/* Demo Credentials Button - Only show in dev/staging */}
-              {isDemoEnabled && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="w-full mt-4 border-dashed border-2 text-muted-foreground hover:text-primary hover:border-primary"
-                  onClick={fillDemoCredentials}
-                  disabled={loading}
-                >
-                  🎯 Use Demo {userType.charAt(0).toUpperCase() + userType.slice(1)} Email
-                </Button>
-              )}
+              {/* Demo Credentials Notepad */}
+              <div className="mt-4 p-3 bg-muted/50 rounded-xl border border-border">
+                <p className="text-xs text-muted-foreground mb-2 font-medium">
+                  📋 Demo {userType.charAt(0).toUpperCase() + userType.slice(1)} Credentials
+                </p>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between bg-background rounded-lg px-3 py-2 border">
+                    <div className="text-sm">
+                      <span className="text-muted-foreground">Email: </span>
+                      <span className="font-mono font-medium text-foreground">{demoCredentials[userType].email}</span>
+                    </div>
+                    <button onClick={() => copyToClipboard(demoCredentials[userType].email, `${userType}-email`)} className="ml-2 text-muted-foreground hover:text-primary transition-colors">
+                      {copiedField === `${userType}-email` ? <Check className="w-4 h-4 text-primary" /> : <Copy className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between bg-background rounded-lg px-3 py-2 border">
+                    <div className="text-sm">
+                      <span className="text-muted-foreground">Pass: </span>
+                      <span className="font-mono font-medium text-foreground">{demoCredentials[userType].password}</span>
+                    </div>
+                    <button onClick={() => copyToClipboard(demoCredentials[userType].password, `${userType}-pass`)} className="ml-2 text-muted-foreground hover:text-primary transition-colors">
+                      {copiedField === `${userType}-pass` ? <Check className="w-4 h-4 text-primary" /> : <Copy className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* Email Auth Badge */}
