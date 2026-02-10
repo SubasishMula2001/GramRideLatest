@@ -726,12 +726,53 @@ const DriverDashboard = () => {
       upiTransactionId,
     });
 
-    // If UPI payment already completed, default to UPI
+    // If UPI payment already completed, auto-complete the ride without showing modal
     if (upiPaymentCompleted) {
       setSelectedPaymentConfirm('upi');
-    } else {
-      setSelectedPaymentConfirm((activeRide.payment_method || 'cash') as PaymentConfirmMethod);
+      // Auto-complete: no need for driver to confirm anything
+      setProcessingPayment(true);
+      try {
+        const { error } = await supabase
+          .from('rides')
+          .update({ 
+            status: 'completed',
+            completed_at: new Date().toISOString(),
+            payment_status: 'completed',
+            payment_method: 'upi'
+          })
+          .eq('id', activeRide.id);
+
+        if (error) throw error;
+
+        // Update earnings
+        await supabase
+          .from('drivers')
+          .update({ earnings: (driverData.earnings || 0) + activeRide.fare })
+          .eq('id', driverData.id);
+
+        toast.success(`Ride completed! ₹${activeRide.fare} received via UPI ✅`);
+        setActiveRide(null);
+        setUpiPaidLive({ paid: false, transactionId: null });
+        fetchDriverData();
+
+        if (user?.id) {
+          const { logActivity } = await import('@/hooks/useActivityLog');
+          await logActivity({
+            userId: user.id,
+            action: 'Ride Completed with UPI Payment (Auto)',
+            details: { ride_id: activeRide.id, driver_id: driverData.id, fare: activeRide.fare }
+          });
+        }
+      } catch (error) {
+        console.error('Error auto-completing ride:', error);
+        toast.error('Failed to complete ride');
+      } finally {
+        setProcessingPayment(false);
+      }
+      return;
     }
+    
+    setSelectedPaymentConfirm((activeRide.payment_method || 'cash') as PaymentConfirmMethod);
     setShowPaymentConfirmModal(true);
   };
 
