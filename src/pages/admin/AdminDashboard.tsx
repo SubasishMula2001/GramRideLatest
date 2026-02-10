@@ -7,6 +7,7 @@ import DataTable from '@/components/DataTable';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import ChangePasswordSection from '@/components/ChangePasswordSection';
 
 interface RecentRide {
   id: string;
@@ -251,6 +252,11 @@ const AdminDashboard = () => {
               No rides yet
             </div>
           )}
+        </div>
+
+        {/* Change Password */}
+        <div className="mt-6">
+          <ChangePasswordSection />
         </div>
       </div>
     </AdminLayout>

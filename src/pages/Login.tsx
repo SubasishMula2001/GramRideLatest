@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Mail, Lock, ArrowRight, User, Car, Loader2, Home, Eye, EyeOff, Copy, Check } from 'lucide-react';
+import { Mail, Lock, ArrowRight, User, Car, Loader2, Home, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import GramRideLogo from '@/components/GramRideLogo';
@@ -33,20 +33,6 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string; fullName?: string }>({});
   const [showPassword, setShowPassword] = useState(false);
-  const [copiedField, setCopiedField] = useState<string | null>(null);
-
-  const demoCredentials: Record<UserType, { email: string; password: string }> = {
-    user: { email: 'user@gramride.com', password: 'Demo@123' },
-    driver: { email: 'driver@gramride.com', password: 'Demo@123' },
-    admin: { email: 'admin@gramride.com', password: 'Demo@123' },
-  };
-
-  const copyToClipboard = (text: string, field: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedField(field);
-    toast.success('Copied!');
-    setTimeout(() => setCopiedField(null), 1500);
-  };
 
   useEffect(() => {
     if (user && !authLoading) {
@@ -206,33 +192,6 @@ const Login = () => {
                     </span>
                   </button>
                 ))}
-              </div>
-              
-              {/* Demo Credentials Notepad */}
-              <div className="mt-4 p-3 bg-muted/50 rounded-xl border border-border">
-                <p className="text-xs text-muted-foreground mb-2 font-medium">
-                  📋 Demo {userType.charAt(0).toUpperCase() + userType.slice(1)} Credentials
-                </p>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between bg-background rounded-lg px-3 py-2 border">
-                    <div className="text-sm">
-                      <span className="text-muted-foreground">Email: </span>
-                      <span className="font-mono font-medium text-foreground">{demoCredentials[userType].email}</span>
-                    </div>
-                    <button onClick={() => copyToClipboard(demoCredentials[userType].email, `${userType}-email`)} className="ml-2 text-muted-foreground hover:text-primary transition-colors">
-                      {copiedField === `${userType}-email` ? <Check className="w-4 h-4 text-primary" /> : <Copy className="w-4 h-4" />}
-                    </button>
-                  </div>
-                  <div className="flex items-center justify-between bg-background rounded-lg px-3 py-2 border">
-                    <div className="text-sm">
-                      <span className="text-muted-foreground">Pass: </span>
-                      <span className="font-mono font-medium text-foreground">{demoCredentials[userType].password}</span>
-                    </div>
-                    <button onClick={() => copyToClipboard(demoCredentials[userType].password, `${userType}-pass`)} className="ml-2 text-muted-foreground hover:text-primary transition-colors">
-                      {copiedField === `${userType}-pass` ? <Check className="w-4 h-4 text-primary" /> : <Copy className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
               </div>
             </div>
 
