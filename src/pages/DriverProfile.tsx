@@ -21,6 +21,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import RideHistory from '@/components/RideHistory';
+import ChangePasswordSection from '@/components/ChangePasswordSection';
 
 interface DriverProfile {
   full_name: string | null;
@@ -300,6 +301,11 @@ const DriverProfile = () => {
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* Change Password */}
+          <div className="mt-6">
+            <ChangePasswordSection />
           </div>
 
           {/* Ride History */}
