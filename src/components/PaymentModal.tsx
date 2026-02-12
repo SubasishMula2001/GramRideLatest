@@ -40,6 +40,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   const { t } = useLanguage();
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const paymentIdRef = useRef<string | null>(null);
+  const paymentStatusRef = useRef<PaymentStatus>('idle');
 
   const isBengali = t.signIn === 'লগইন করুন';
 
@@ -74,6 +75,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         stopPolling();
         setTransactionId(data.razorpay_payment_id || null);
         setPaymentStatus('success');
+        paymentStatusRef.current = 'success';
         setIsLoading(false);
         toast({
           title: 'Payment Successful! ✅',
@@ -120,7 +122,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   const handleUPIPayment = async () => {
     setIsLoading(true);
     setPaymentStatus('processing');
-
+    paymentStatusRef.current = 'processing';
     try {
       const scriptLoaded = await loadRazorpayScript();
       if (!scriptLoaded) throw new Error('Failed to load payment gateway');
@@ -194,6 +196,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
             stopPolling();
             setTransactionId(response.razorpay_payment_id);
             setPaymentStatus('success');
+            paymentStatusRef.current = 'success';
             toast({
               title: 'Payment Successful! ✅',
               description: `₹${amount} paid via UPI`,
@@ -208,16 +211,17 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         },
         modal: {
           ondismiss: () => {
-            // When modal is dismissed, do a final check
+            // Do a final check
             checkPaymentStatus();
-            // If still not completed after 10s, stop
+            // Wait a short time, then reset if not completed
             setTimeout(() => {
-              if (paymentStatus !== 'success') {
+              if (paymentStatusRef.current !== 'success') {
                 stopPolling();
                 setPaymentStatus('idle');
+                paymentStatusRef.current = 'idle';
                 setIsLoading(false);
               }
-            }, 15000);
+            }, 5000);
           },
         },
       };
@@ -227,6 +231,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         console.error('Payment failed:', response.error);
         stopPolling();
         setPaymentStatus('failed');
+        paymentStatusRef.current = 'failed';
         toast({
           title: 'Payment Failed',
           description: response.error.description || 'Payment could not be processed',
@@ -240,6 +245,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       console.error('UPI payment error:', error);
       stopPolling();
       setPaymentStatus('failed');
+      paymentStatusRef.current = 'failed';
       setIsLoading(false);
       toast({
         title: 'Payment Error',
@@ -292,6 +298,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   const resetState = () => {
     setSelectedMethod(null);
     setPaymentStatus('idle');
+    paymentStatusRef.current = 'idle';
     setIsLoading(false);
     setTransactionId(null);
     stopPolling();
