@@ -473,7 +473,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
 
           {/* Waiting for payment (Razorpay modal open, polling active) */}
           {paymentStatus === 'processing' && !isLoading && (
-            <div className="flex flex-col items-center gap-2 py-6">
+            <div className="flex flex-col items-center gap-3 py-6">
               <Loader2 className="h-8 w-8 text-primary animate-spin" />
               <p className="text-sm text-muted-foreground">
                 {isBengali ? 'পেমেন্টের জন্য অপেক্ষা করা হচ্ছে...' : 'Waiting for payment confirmation...'}
@@ -481,6 +481,19 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
               <p className="text-xs text-muted-foreground">
                 {isBengali ? 'পেমেন্ট সম্পন্ন হলে স্বয়ংক্রিয়ভাবে আপডেট হবে' : 'Will update automatically once payment is confirmed'}
               </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-2"
+                onClick={() => {
+                  stopPolling();
+                  setPaymentStatus('idle');
+                  paymentStatusRef.current = 'idle';
+                  setIsLoading(false);
+                }}
+              >
+                {isBengali ? 'বাতিল করুন' : 'Cancel & Go Back'}
+              </Button>
             </div>
           )}
         </div>
