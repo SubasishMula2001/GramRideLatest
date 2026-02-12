@@ -173,7 +173,13 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         prefill,
         theme: { color: '#22c55e' },
         handler: async (response: any) => {
-          // Client-side callback — try to verify if still authenticated
+          // Try to refresh session first — it may have expired while in UPI app
+          try {
+            await supabase.auth.refreshSession();
+          } catch {
+            console.warn('Session refresh failed, will rely on polling');
+          }
+
           try {
             const { data: verifyData, error: verifyError } = await supabase.functions.invoke(
               'verify-razorpay-payment',
@@ -210,7 +216,13 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
           }
         },
         modal: {
-          ondismiss: () => {
+          ondismiss: async () => {
+            // Try to recover session when user returns from UPI app
+            try {
+              await supabase.auth.refreshSession();
+            } catch {
+              console.warn('Session refresh on dismiss failed');
+            }
             // Do a final check
             checkPaymentStatus();
             // Wait a short time, then reset if not completed

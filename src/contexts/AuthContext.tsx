@@ -54,7 +54,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      async (event, session) => {
+        // If session expired/invalid, try to recover before logging out
+        if (!session && (event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED')) {
+          try {
+            const { data } = await supabase.auth.getSession();
+            if (data.session) {
+              // Session recovered, use it
+              setSession(data.session);
+              setUser(data.session.user);
+              setTimeout(() => {
+                fetchUserRole(data.session!.user.id).then(setUserRole);
+              }, 0);
+              return;
+            }
+          } catch {
+            // Recovery failed, proceed with logout
+          }
+        }
+
         setSession(session);
         setUser(session?.user ?? null);
         
