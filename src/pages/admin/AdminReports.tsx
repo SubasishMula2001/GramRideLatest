@@ -52,6 +52,8 @@ const AdminReports = () => {
     totalDrivers: 0,
     avgFare: 0,
     completionRate: 0,
+    platformProfit: 0,
+    commissionPercent: 0,
   });
   const [revenueData, setRevenueData] = useState<RevenueData[]>([]);
   const [rideTypeData, setRideTypeData] = useState<RideTypeData[]>([]);
@@ -89,6 +91,16 @@ const AdminReports = () => {
         .from('drivers')
         .select('*', { count: 'exact', head: true });
 
+      // Fetch commission percentage
+      const { data: commissionData } = await supabase
+        .from('app_settings')
+        .select('value')
+        .eq('key', 'platform_commission_percent')
+        .single();
+      const commissionPct = commissionData?.value != null
+        ? (typeof commissionData.value === 'string' ? parseFloat(commissionData.value) : Number(commissionData.value))
+        : 0;
+
       if (rides) {
         const completedRides = rides.filter(r => r.status === 'completed');
         const totalRevenue = completedRides.reduce((sum, r) => sum + (r.fare || 0), 0);
@@ -102,6 +114,8 @@ const AdminReports = () => {
           totalDrivers: driverCount || 0,
           avgFare: Math.round(avgFare),
           completionRate: Math.round(completionRate),
+          platformProfit: Math.round(totalRevenue * (isNaN(commissionPct) ? 0 : commissionPct) / 100),
+          commissionPercent: isNaN(commissionPct) ? 0 : commissionPct,
         });
 
         // Generate revenue chart data
@@ -190,7 +204,7 @@ const AdminReports = () => {
         </Tabs>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
           <div className="bg-gradient-card rounded-2xl border border-border/50 p-5 shadow-card">
             <div className="flex items-center gap-3 mb-3">
               <div className="p-2 rounded-lg bg-primary/10">
@@ -229,6 +243,16 @@ const AdminReports = () => {
               <span className="text-sm text-muted-foreground">Completion Rate</span>
             </div>
             <div className="text-3xl font-bold text-foreground">{stats.completionRate}%</div>
+          </div>
+
+          <div className="bg-gradient-card rounded-2xl border border-border/50 p-5 shadow-card">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <TrendingUp className="w-5 h-5 text-primary" />
+              </div>
+              <span className="text-sm text-muted-foreground">Platform Profit ({stats.commissionPercent}%)</span>
+            </div>
+            <div className="text-3xl font-bold text-foreground">₹{stats.platformProfit.toLocaleString()}</div>
           </div>
         </div>
 

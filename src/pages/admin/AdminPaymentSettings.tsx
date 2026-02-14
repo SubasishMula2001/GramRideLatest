@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CreditCard, Key, Shield, ExternalLink, CheckCircle, Info, Loader2, Moon, TrendingUp, Map, Eye, EyeOff, Save } from 'lucide-react';
+import { CreditCard, Key, Shield, ExternalLink, CheckCircle, Info, Loader2, Moon, TrendingUp, Map, Eye, EyeOff, Save, IndianRupee } from 'lucide-react';
 import AdminLayout from '@/components/AdminLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -25,6 +25,8 @@ const AdminPaymentSettings = () => {
   const [loadingSettings, setLoadingSettings] = useState(true);
   const [savingNightCharges, setSavingNightCharges] = useState(false);
   const [savingSurge, setSavingSurge] = useState(false);
+  const [commissionPercent, setCommissionPercent] = useState('10');
+  const [savingCommission, setSavingCommission] = useState(false);
 
   // API Key states
   const [apiKeys, setApiKeys] = useState({
@@ -52,7 +54,8 @@ const AdminPaymentSettings = () => {
             'surge_pricing_enabled',
             'surge_multiplier',
             'surge_start_hour',
-            'surge_end_hour'
+            'surge_end_hour',
+            'platform_commission_percent'
           ]);
 
         if (error) {
@@ -71,6 +74,10 @@ const AdminPaymentSettings = () => {
             startHour: settings.surge_start_hour?.toString() || '8',
             endHour: settings.surge_end_hour?.toString() || '10',
           });
+
+          if (settings.platform_commission_percent != null) {
+            setCommissionPercent(String(settings.platform_commission_percent));
+          }
         }
       } catch (err) {
         console.error('Error:', err);
@@ -169,6 +176,28 @@ const AdminPaymentSettings = () => {
       toast.error('Failed to save surge pricing settings');
     } finally {
       setSavingSurge(false);
+    }
+  };
+
+  const handleSaveCommission = async () => {
+    setSavingCommission(true);
+    try {
+      const val = parseFloat(commissionPercent);
+      if (isNaN(val) || val < 0 || val > 100) {
+        toast.error('Commission must be between 0 and 100');
+        return;
+      }
+      const { error } = await supabase
+        .from('app_settings')
+        .update({ value: commissionPercent })
+        .eq('key', 'platform_commission_percent');
+      if (error) throw error;
+      toast.success(`Platform commission set to ${commissionPercent}%`);
+    } catch (err) {
+      console.error('Error:', err);
+      toast.error('Failed to save commission setting');
+    } finally {
+      setSavingCommission(false);
     }
   };
 
@@ -547,6 +576,52 @@ const AdminPaymentSettings = () => {
           </CardContent>
         </Card>
 
+        {/* Platform Commission */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <IndianRupee className="h-5 w-5 text-primary" />
+              Platform Commission
+            </CardTitle>
+            <CardDescription>
+              Set the percentage deducted from each ride fare as platform profit
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center gap-4 p-4 bg-muted/50 rounded-lg">
+              <div className="space-y-2">
+                <Label htmlFor="commission-percent">Commission Percentage (%)</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="commission-percent"
+                    type="number"
+                    step="0.5"
+                    min="0"
+                    max="100"
+                    value={commissionPercent}
+                    onChange={(e) => setCommissionPercent(e.target.value)}
+                    className="w-24"
+                  />
+                  <span className="text-muted-foreground">%</span>
+                </div>
+              </div>
+            </div>
+
+            <Alert variant="default" className="bg-muted/30">
+              <Info className="h-4 w-4" />
+              <AlertDescription>
+                For a ₹100 ride with {commissionPercent}% commission: Driver receives ₹{Math.round(100 - 100 * parseFloat(commissionPercent || '0') / 100)}, Platform earns ₹{Math.round(100 * parseFloat(commissionPercent || '0') / 100)}.
+              </AlertDescription>
+            </Alert>
+
+            <div className="flex justify-end">
+              <Button onClick={handleSaveCommission} disabled={savingCommission}>
+                {savingCommission ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+                Save Commission
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
         {/* Payment Gateway Status */}
         <Card>
           <CardHeader>

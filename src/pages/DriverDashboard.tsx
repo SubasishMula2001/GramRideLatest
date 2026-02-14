@@ -49,6 +49,22 @@ const cleanPlusCode = (address: string): string => {
     .trim();
 };
 
+// Helper to fetch platform commission percentage from app_settings
+const getCommissionPercent = async (): Promise<number> => {
+  try {
+    const { data } = await supabase
+      .from('app_settings')
+      .select('value')
+      .eq('key', 'platform_commission_percent')
+      .single();
+    if (data?.value != null) {
+      const val = typeof data.value === 'string' ? parseFloat(data.value) : Number(data.value);
+      return isNaN(val) ? 0 : val;
+    }
+  } catch {}
+  return 0;
+};
+
 interface PendingRide {
   id: string;
   ride_type: 'passenger' | 'goods';
@@ -744,10 +760,12 @@ const DriverDashboard = () => {
 
         if (error) throw error;
 
-        // Update earnings
+        // Update earnings (apply platform commission)
+        const commissionPercent = await getCommissionPercent();
+        const driverEarning = activeRide.fare - (activeRide.fare * commissionPercent / 100);
         await supabase
           .from('drivers')
-          .update({ earnings: (driverData.earnings || 0) + activeRide.fare })
+          .update({ earnings: (driverData.earnings || 0) + driverEarning })
           .eq('id', driverData.id);
 
         toast.success(`Ride completed! ₹${activeRide.fare} received via UPI ✅`);
@@ -813,11 +831,13 @@ const DriverDashboard = () => {
 
       if (error) throw error;
 
-      // Update earnings only if payment was received
+      // Update earnings only if payment was received (apply platform commission)
       if (paymentReceived) {
+        const commissionPercent = await getCommissionPercent();
+        const driverEarning = fare - (fare * commissionPercent / 100);
         await supabase
           .from('drivers')
-          .update({ earnings: (driverData.earnings || 0) + fare })
+          .update({ earnings: (driverData.earnings || 0) + driverEarning })
           .eq('id', driverData.id);
       }
 
@@ -895,10 +915,12 @@ const DriverDashboard = () => {
 
       if (error) throw error;
 
-      // Update earnings
+      // Update earnings (apply platform commission)
+      const commissionPercent = await getCommissionPercent();
+      const driverEarning = paymentContext.fare - (paymentContext.fare * commissionPercent / 100);
       await supabase
         .from('drivers')
-        .update({ earnings: (driverData.earnings || 0) + paymentContext.fare })
+        .update({ earnings: (driverData.earnings || 0) + driverEarning })
         .eq('id', driverData.id);
 
       toast.success(`Payment received! ₹${paymentContext.fare} via ${selectedPaymentConfirm === 'upi' ? 'UPI' : 'Cash'}`);
