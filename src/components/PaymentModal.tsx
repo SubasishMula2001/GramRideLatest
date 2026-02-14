@@ -324,9 +324,19 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     }
   };
 
+  const isRazorpayOpen = paymentStatus === 'processing';
+
   return (
-    <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md">
+    <Dialog open={isOpen} onOpenChange={handleClose} modal={!isRazorpayOpen}>
+      <DialogContent 
+        className="sm:max-w-md"
+        onInteractOutside={(e) => {
+          if (isRazorpayOpen) e.preventDefault();
+        }}
+        onPointerDownOutside={(e) => {
+          if (isRazorpayOpen) e.preventDefault();
+        }}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CreditCard className="h-5 w-5 text-primary" />
