@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { MapPin, Navigation, Clock, IndianRupee, Package, Users, Loader2, Play } from 'lucide-react';
+import { MapPin, Navigation, Clock, IndianRupee, Package, Users, Loader2, Play, CreditCard, Banknote, Wallet, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
@@ -16,6 +16,8 @@ interface Ride {
   ride_type: string;
   created_at: string;
   completed_at: string | null;
+  payment_status: string | null;
+  payment_method: string | null;
 }
 
 interface RideHistoryProps {
@@ -49,7 +51,7 @@ const RideHistory: React.FC<RideHistoryProps> = ({ userId, userType }) => {
     try {
       let query = supabase
         .from('rides')
-        .select('id, pickup_location, dropoff_location, fare, distance_km, status, ride_type, created_at, completed_at')
+        .select('id, pickup_location, dropoff_location, fare, distance_km, status, ride_type, created_at, completed_at, payment_status, payment_method')
         .order('created_at', { ascending: false })
         .limit(10);
 
@@ -228,6 +230,40 @@ const RideHistory: React.FC<RideHistoryProps> = ({ userId, userType }) => {
                 {format(new Date(ride.created_at), 'dd MMM, hh:mm a')}
               </span>
             </div>
+
+            {/* Payment info for drivers */}
+            {userType === 'driver' && ride.status === 'completed' && (
+              <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/20">
+                <div className="flex items-center gap-1.5">
+                  {ride.payment_method === 'upi' ? (
+                    <CreditCard className="w-3.5 h-3.5 text-muted-foreground" />
+                  ) : ride.payment_method === 'cash' ? (
+                    <Banknote className="w-3.5 h-3.5 text-muted-foreground" />
+                  ) : ride.payment_method === 'wallet' ? (
+                    <Wallet className="w-3.5 h-3.5 text-muted-foreground" />
+                  ) : (
+                    <AlertCircle className="w-3.5 h-3.5 text-muted-foreground" />
+                  )}
+                  <span className="text-xs text-muted-foreground capitalize">
+                    {ride.payment_method || 'Not set'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  {ride.payment_status === 'completed' ? (
+                    <CheckCircle2 className="w-3.5 h-3.5 text-primary" />
+                  ) : (
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
+                  )}
+                  <span className={`text-xs font-medium ${
+                    ride.payment_status === 'completed' 
+                      ? 'text-primary' 
+                      : 'text-amber-500'
+                  }`}>
+                    {ride.payment_status === 'completed' ? 'Paid' : 'Payment Pending'}
+                  </span>
+                </div>
+              </div>
+            )}
 
             {/* Resume button for incomplete rides */}
             {isIncompleteRide(ride.status) && (
