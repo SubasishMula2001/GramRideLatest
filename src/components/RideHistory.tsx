@@ -231,8 +231,8 @@ const RideHistory: React.FC<RideHistoryProps> = ({ userId, userType }) => {
               </span>
             </div>
 
-            {/* Payment info for drivers */}
-            {userType === 'driver' && ride.status === 'completed' && (
+            {/* Payment info for completed rides */}
+            {ride.status === 'completed' && (
               <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/20">
                 <div className="flex items-center gap-1.5">
                   {ride.payment_method === 'upi' ? (
@@ -262,6 +262,23 @@ const RideHistory: React.FC<RideHistoryProps> = ({ userId, userType }) => {
                     {ride.payment_status === 'completed' ? 'Paid' : 'Payment Pending'}
                   </span>
                 </div>
+              </div>
+            )}
+
+            {/* Pay Now button for users with unpaid completed rides */}
+            {userType === 'user' && ride.status === 'completed' && ride.payment_status !== 'completed' && (
+              <div className="mt-2">
+                <Button 
+                  size="sm" 
+                  className="w-full bg-amber-500 hover:bg-amber-600 text-white"
+                  onClick={() => {
+                    toast.info('Redirecting to complete payment...');
+                    navigate('/book', { state: { pendingRideId: ride.id } });
+                  }}
+                >
+                  <IndianRupee className="w-4 h-4 mr-2" />
+                  Pay Now {ride.fare ? `₹${ride.fare}` : ''}
+                </Button>
               </div>
             )}
 
