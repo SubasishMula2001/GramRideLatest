@@ -9,6 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { toast } from 'sonner';
 import { z } from 'zod';
+import { Checkbox } from '@/components/ui/checkbox';
 
 type UserType = 'user' | 'driver' | 'admin';
 
@@ -31,8 +32,9 @@ const Login = () => {
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState<{ email?: string; password?: string; fullName?: string }>({});
+  const [errors, setErrors] = useState<{ email?: string; password?: string; fullName?: string; terms?: string }>({});
   const [showPassword, setShowPassword] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   useEffect(() => {
     if (user && !authLoading) {
@@ -51,7 +53,7 @@ const Login = () => {
   };
 
   const validateEmailForm = () => {
-    const newErrors: { email?: string; password?: string; fullName?: string } = {};
+    const newErrors: { email?: string; password?: string; fullName?: string; terms?: string } = {};
     
     try {
       emailSchema.parse(email);
@@ -79,6 +81,10 @@ const Login = () => {
 
     if (!isLogin && !fullName.trim()) {
       newErrors.fullName = t.nameRequired;
+    }
+
+    if (!isLogin && !acceptedTerms) {
+      newErrors.terms = language === 'bn' ? 'শর্তাবলী মেনে নিতে হবে' : 'You must accept the Terms & Conditions';
     }
 
     setErrors(newErrors);
@@ -274,6 +280,44 @@ const Login = () => {
                 )}
               </div>
 
+              {/* Terms & Conditions Checkbox - Signup only */}
+              {!isLogin && (
+                <div>
+                  <div className="flex items-start gap-3">
+                    <Checkbox
+                      id="terms"
+                      checked={acceptedTerms}
+                      onCheckedChange={(checked) => setAcceptedTerms(checked === true)}
+                      className="mt-1"
+                      disabled={loading}
+                    />
+                    <label htmlFor="terms" className="text-sm text-muted-foreground leading-relaxed cursor-pointer">
+                      {language === 'bn' ? (
+                        <>
+                          আমি{' '}
+                          <Link to="/terms-and-conditions" target="_blank" className="text-primary hover:underline font-medium">শর্তাবলী</Link>,{' '}
+                          <Link to="/privacy-policy" target="_blank" className="text-primary hover:underline font-medium">গোপনীয়তা নীতি</Link>,{' '}
+                          <Link to="/disclaimer" target="_blank" className="text-primary hover:underline font-medium">দাবিত্যাগ</Link> ও{' '}
+                          <Link to="/cancellation-policy" target="_blank" className="text-primary hover:underline font-medium">বাতিল নীতি</Link>{' '}
+                          পড়েছি এবং সম্মত আছি
+                        </>
+                      ) : (
+                        <>
+                          I agree to the{' '}
+                          <Link to="/terms-and-conditions" target="_blank" className="text-primary hover:underline font-medium">Terms & Conditions</Link>,{' '}
+                          <Link to="/privacy-policy" target="_blank" className="text-primary hover:underline font-medium">Privacy Policy</Link>,{' '}
+                          <Link to="/disclaimer" target="_blank" className="text-primary hover:underline font-medium">Disclaimer</Link> &{' '}
+                          <Link to="/cancellation-policy" target="_blank" className="text-primary hover:underline font-medium">Cancellation Policy</Link>
+                        </>
+                      )}
+                    </label>
+                  </div>
+                  {errors.terms && (
+                    <p className="text-destructive text-sm mt-1 ml-7">{errors.terms}</p>
+                  )}
+                </div>
+              )}
+
               <Button 
                 variant="default" 
                 size="lg" 
@@ -300,6 +344,7 @@ const Login = () => {
                   onClick={() => {
                     setIsLogin(!isLogin);
                     setErrors({});
+                    setAcceptedTerms(false);
                   }}
                   className="text-primary font-semibold hover:underline ml-2"
                   disabled={loading}
