@@ -27,6 +27,11 @@ import AdminLiveMonitor from "./pages/admin/AdminLiveMonitor";
 import AdminPromoCodes from "./pages/admin/AdminPromoCodes";
 import AdminPayouts from "./pages/admin/AdminPayouts";
 import NotFound from "./pages/NotFound";
+import TermsAndConditions from "./pages/TermsAndConditions";
+import DriverTerms from "./pages/DriverTerms";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import Disclaimer from "./pages/Disclaimer";
+import CancellationPolicy from "./pages/CancellationPolicy";
 
 const queryClient = new QueryClient();
 
@@ -133,6 +138,13 @@ const App = () => (
                 <AdminPayouts />
               </ProtectedRoute>
             } />
+            
+            {/* Legal Pages */}
+            <Route path="/terms-and-conditions" element={<TermsAndConditions />} />
+            <Route path="/driver-terms" element={<DriverTerms />} />
+            <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+            <Route path="/disclaimer" element={<Disclaimer />} />
+            <Route path="/cancellation-policy" element={<CancellationPolicy />} />
             
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
