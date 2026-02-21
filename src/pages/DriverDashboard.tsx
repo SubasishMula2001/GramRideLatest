@@ -749,48 +749,69 @@ const DriverDashboard = () => {
     // Use live state if available, otherwise check DB
     let upiPaymentCompleted = upiPaidLive.paid;
     let upiTransactionId: string | null = upiPaidLive.transactionId;
+    let onlinePaymentCompleted = false;
+    let onlinePaymentMethod: string | null = null;
     
     if (!upiPaymentCompleted) {
       try {
+        // Check payments table for any completed online payment
         const { data: paymentData } = await supabase
           .from('payments')
           .select('payment_status, razorpay_payment_id, payment_method')
           .eq('ride_id', activeRide.id)
           .eq('payment_status', 'completed')
-          .eq('payment_method', 'upi')
           .maybeSingle();
         
         if (paymentData) {
-          upiPaymentCompleted = true;
-          upiTransactionId = paymentData.razorpay_payment_id;
+          if (paymentData.payment_method === 'upi') {
+            upiPaymentCompleted = true;
+            upiTransactionId = paymentData.razorpay_payment_id;
+          }
+          onlinePaymentCompleted = true;
+          onlinePaymentMethod = paymentData.payment_method;
         }
       } catch (error) {
         console.error('Error checking payment status:', error);
       }
+    } else {
+      onlinePaymentCompleted = true;
+      onlinePaymentMethod = 'upi';
+    }
+
+    // Also check the ride's own payment_status (may have been updated by realtime)
+    if (!onlinePaymentCompleted) {
+      try {
+        const { data: rideData } = await supabase
+          .from('rides')
+          .select('payment_status, payment_method')
+          .eq('id', activeRide.id)
+          .single();
+        
+        if (rideData?.payment_status === 'completed') {
+          onlinePaymentCompleted = true;
+          onlinePaymentMethod = rideData.payment_method;
+          if (rideData.payment_method === 'upi') {
+            upiPaymentCompleted = true;
+          }
+        }
+      } catch (error) {
+        console.error('Error checking ride payment status:', error);
+      }
     }
     
-    // Snapshot the ride so modal keeps working even if activeRide becomes null (e.g. status changes quickly)
-    setPaymentContext({
-      rideId: activeRide.id,
-      fare: activeRide.fare,
-      existingPaymentMethod: activeRide.payment_method,
-      upiPaymentCompleted,
-      upiTransactionId,
-    });
-
-    // If UPI payment already completed, auto-complete the ride without showing modal
-    if (upiPaymentCompleted) {
-      setSelectedPaymentConfirm('upi');
-      // Auto-complete: no need for driver to confirm anything
+    // If any online payment is already completed, auto-complete the ride without showing modal
+    if (onlinePaymentCompleted) {
       setProcessingPayment(true);
       try {
+        const methodLabel = onlinePaymentMethod === 'upi' ? 'UPI' : (onlinePaymentMethod || 'Online');
+        
         const { error } = await supabase
           .from('rides')
           .update({ 
             status: 'completed',
             completed_at: new Date().toISOString(),
             payment_status: 'completed',
-            payment_method: 'upi'
+            payment_method: (onlinePaymentMethod || 'upi') as 'upi' | 'cash' | 'wallet'
           })
           .eq('id', activeRide.id);
 
@@ -804,7 +825,7 @@ const DriverDashboard = () => {
           .update({ earnings: (driverData.earnings || 0) + driverEarning })
           .eq('id', driverData.id);
 
-        toast.success(`Ride completed! ₹${activeRide.fare} received via UPI ✅`);
+        toast.success(`Ride completed! ₹${activeRide.fare} received via ${methodLabel} ✅`);
         setActiveRide(null);
         setUpiPaidLive({ paid: false, transactionId: null });
         fetchDriverData();
@@ -813,7 +834,7 @@ const DriverDashboard = () => {
           const { logActivity } = await import('@/hooks/useActivityLog');
           await logActivity({
             userId: user.id,
-            action: 'Ride Completed with UPI Payment (Auto)',
+            action: `Ride Completed with ${methodLabel} Payment (Auto)`,
             details: { ride_id: activeRide.id, driver_id: driverData.id, fare: activeRide.fare }
           });
         }
@@ -826,6 +847,14 @@ const DriverDashboard = () => {
       return;
     }
     
+    // No online payment found - show the confirmation modal for cash
+    setPaymentContext({
+      rideId: activeRide.id,
+      fare: activeRide.fare,
+      existingPaymentMethod: activeRide.payment_method,
+      upiPaymentCompleted: false,
+      upiTransactionId: null,
+    });
     setSelectedPaymentConfirm((activeRide.payment_method || 'cash') as PaymentConfirmMethod);
     setShowPaymentConfirmModal(true);
   };
