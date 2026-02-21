@@ -306,6 +306,42 @@ const DriverDashboard = () => {
     };
   }, [activeRide?.id]);
 
+  // Subscribe to payment updates for pending payment rides (completed rides awaiting payment)
+  useEffect(() => {
+    if (!driverData?.id) return;
+
+    // Listen for payment completions and ride payment_status changes
+    const channel = supabase
+      .channel(`driver-pending-payments-${driverData.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'rides',
+          filter: `driver_id=eq.${driverData.id}`
+        },
+        (payload: any) => {
+          const updatedRide = payload.new;
+          // If a pending payment ride just got its payment completed (e.g. user paid via UPI)
+          if (updatedRide?.status === 'completed' && updatedRide?.payment_status === 'completed') {
+            setPendingPaymentRides(prev => {
+              const wasPresent = prev.some(r => r.id === updatedRide.id);
+              if (wasPresent) {
+                toast.success(`Payment received for ride! ₹${updatedRide.fare} via ${updatedRide.payment_method === 'upi' ? 'UPI' : 'Cash'} ✅`);
+              }
+              return prev.filter(r => r.id !== updatedRide.id);
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [driverData?.id]);
+
   // Subscribe to pending rides when online
   useEffect(() => {
     if (!isOnline || !driverData?.is_verified) return;
@@ -878,7 +914,49 @@ const DriverDashboard = () => {
     }
   };
 
-  const handleAcceptPendingPayment = (ride: PendingPaymentRide) => {
+  const handleAcceptPendingPayment = async (ride: PendingPaymentRide) => {
+    // First check if UPI payment was already completed by the user
+    try {
+      const { data: paymentData } = await supabase
+        .from('payments')
+        .select('payment_status, razorpay_payment_id, payment_method')
+        .eq('ride_id', ride.id)
+        .eq('payment_status', 'completed')
+        .eq('payment_method', 'upi')
+        .maybeSingle();
+
+      if (paymentData) {
+        // UPI already paid - auto-confirm without showing modal
+        toast.success(`Payment already received via UPI! ₹${ride.fare} ✅`);
+        
+        // Update ride payment status
+        await supabase
+          .from('rides')
+          .update({ 
+            payment_status: 'completed',
+            payment_method: 'upi'
+          })
+          .eq('id', ride.id);
+
+        // Update earnings
+        if (driverData) {
+          const commissionPercent = await getCommissionPercent();
+          const driverEarning = ride.fare - (ride.fare * commissionPercent / 100);
+          await supabase
+            .from('drivers')
+            .update({ earnings: (driverData.earnings || 0) + driverEarning })
+            .eq('id', driverData.id);
+        }
+
+        setPendingPaymentRides(prev => prev.filter(r => r.id !== ride.id));
+        fetchDriverData();
+        return;
+      }
+    } catch (error) {
+      console.error('Error checking payment status:', error);
+    }
+
+    // No UPI payment found - show the confirmation modal for cash
     setPaymentContext({
       rideId: ride.id,
       fare: ride.fare,
