@@ -245,12 +245,41 @@ CREATE INDEX IF NOT EXISTS idx_zone_surge_active ON zone_surge_pricing(is_active
 
 -- 6. ENABLE REALTIME (Optional - if you want real-time updates)
 -- ========================================
+-- Note: Run these only if the tables are NOT already in the publication
 
-ALTER PUBLICATION supabase_realtime ADD TABLE vehicle_types;
-ALTER PUBLICATION supabase_realtime ADD TABLE driver_vehicles;
-ALTER PUBLICATION supabase_realtime ADD TABLE zones;
-ALTER PUBLICATION supabase_realtime ADD TABLE zone_pricing;
-ALTER PUBLICATION supabase_realtime ADD TABLE zone_surge_pricing;
+DO $$
+BEGIN
+  -- Try to add tables to realtime, ignore if already exists
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE vehicle_types;
+  EXCEPTION WHEN duplicate_object THEN
+    NULL; -- Table already in publication, ignore
+  END;
+  
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE driver_vehicles;
+  EXCEPTION WHEN duplicate_object THEN
+    NULL;
+  END;
+  
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE zones;
+  EXCEPTION WHEN duplicate_object THEN
+    NULL;
+  END;
+  
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE zone_pricing;
+  EXCEPTION WHEN duplicate_object THEN
+    NULL;
+  END;
+  
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE zone_surge_pricing;
+  EXCEPTION WHEN duplicate_object THEN
+    NULL;
+  END;
+END $$;
 
 
 -- ========================================
