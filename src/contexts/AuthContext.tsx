@@ -34,9 +34,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Cache to avoid refetching role unnecessarily
   const roleCache = React.useRef<{ userId: string; role: 'admin' | 'user' | 'driver' | null } | null>(null);
 
-  const fetchUserRole = async (userId: string) => {
-    // Return cached role if available
-    if (roleCache.current?.userId === userId) {
+  const fetchUserRole = async (userId: string, forceRefresh: boolean = false) => {
+    // Return cached role if available (unless force refresh)
+    if (!forceRefresh && roleCache.current?.userId === userId) {
       return roleCache.current.role;
     }
 
@@ -70,8 +70,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       async (event, session) => {
         if (!isMounted) return;
 
-        // If session expired/invalid, try to recover before logging out
-        if (!session && (event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED')) {
+        // Handle sign out - clear everything immediately
+        if (event === 'SIGNED_OUT' || !session) {
+          setSession(null);
+          setUser(null);
+          setUserRole(null);
+          roleCache.current = null;
+          return;
+        }
+
+        // If session expired/invalid, try to recover
+        if (event === 'TOKEN_REFRESHED' && !session) {
           try {
             const { data } = await supabase.auth.getSession();
             if (data.session && isMounted) {
@@ -83,19 +92,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
           } catch {
             // Recovery failed, proceed with logout
+            setSession(null);
+            setUser(null);
+            setUserRole(null);
+            roleCache.current = null;
+            return;
           }
         }
 
         setSession(session);
         setUser(session?.user ?? null);
         
-        // Fetch role only for new sessions
-        if (session?.user && event !== 'TOKEN_REFRESHED') {
-          const role = await fetchUserRole(session.user.id);
+        // Force refresh role on new sign in, use cache for token refresh
+        if (session?.user) {
+          const forceRefresh = event === 'SIGNED_IN';
+          const role = await fetchUserRole(session.user.id, forceRefresh);
           if (isMounted) setUserRole(role);
-        } else if (!session) {
-          setUserRole(null);
-          roleCache.current = null; // Clear cache on logout
         }
       }
     );
@@ -194,7 +206,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
     }
     
-    // Clear local state first for immediate UI update
+    // Clear role cache FIRST to prevent stale data
+    roleCache.current = null;
+    
+    // Clear local state for immediate UI update
     setUser(null);
     setSession(null);
     setUserRole(null);
