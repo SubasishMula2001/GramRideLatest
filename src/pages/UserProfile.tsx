@@ -134,9 +134,15 @@ const UserProfile = () => {
     try {
       await signOut();
       toast.success('Logged out successfully');
-      navigate('/login');
+      // Small delay to ensure state is cleared
+      setTimeout(() => {
+        navigate('/login', { replace: true });
+      }, 100);
     } catch (error) {
+      console.error('Logout error:', error);
       toast.error('Failed to logout');
+      // Navigate anyway
+      navigate('/login', { replace: true });
     }
   };
 

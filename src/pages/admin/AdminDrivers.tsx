@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Plus, Filter, Edit, Car, Star, CheckCircle, Loader2 } from 'lucide-react';
+import { Search, Plus, Filter, Edit, Car, Star, CheckCircle, Loader2, Settings } from 'lucide-react';
 import AdminLayout from '@/components/AdminLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,6 +34,13 @@ interface DriverData {
   created_at: string;
 }
 
+interface VehicleType {
+  id: string;
+  name: string;
+  display_name: string;
+  description: string | null;
+}
+
 const AdminDrivers = () => {
   const { user, userRole, loading: authLoading } = useAuth();
   
@@ -51,6 +58,7 @@ const AdminDrivers = () => {
     vehicle_number: '', 
     license_number: '' 
   });
+  const [newDriverVehicles, setNewDriverVehicles] = useState<string[]>([]);
   const [editForm, setEditForm] = useState({
     full_name: '',
     phone: '',
@@ -61,6 +69,13 @@ const AdminDrivers = () => {
   });
   const [addingDriver, setAddingDriver] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
+
+  // Vehicle management states
+  const [isVehicleDialogOpen, setIsVehicleDialogOpen] = useState(false);
+  const [managingDriver, setManagingDriver] = useState<DriverData | null>(null);
+  const [vehicleTypes, setVehicleTypes] = useState<VehicleType[]>([]);
+  const [selectedDriverVehicles, setSelectedDriverVehicles] = useState<string[]>([]);
+  const [savingVehicles, setSavingVehicles] = useState(false);
 
   useEffect(() => {
     // ProtectedRoute already handles auth and role checks
@@ -141,6 +156,11 @@ const AdminDrivers = () => {
       return;
     }
 
+    if (newDriverVehicles.length === 0) {
+      toast.error('Please select at least one vehicle type');
+      return;
+    }
+
     setAddingDriver(true);
     try {
       const response = await supabase.functions.invoke('create-demo-user', {
@@ -156,9 +176,34 @@ const AdminDrivers = () => {
 
       if (response.error) throw response.error;
 
+      // Get the created driver's ID
+      const { data: driverData, error: driverError } = await supabase
+        .from('drivers')
+        .select('id')
+        .eq('vehicle_number', newDriver.vehicle_number.trim().toUpperCase())
+        .single();
+
+      if (driverError) throw driverError;
+
+      // Insert vehicle assignments
+      const vehicleInserts = newDriverVehicles.map((vehicleId, index) => ({
+        driver_id: driverData.id,
+        vehicle_type_id: vehicleId,
+        is_primary: index === 0
+      }));
+
+      const { error: vehiclesError } = await supabase
+        .from('driver_vehicles' as any)
+        .insert(vehicleInserts);
+
+      if (vehiclesError) {
+        console.error('Error assigning vehicles:', vehiclesError);
+      }
+
       toast.success('Driver added successfully');
       setIsAddDialogOpen(false);
       setNewDriver({ full_name: '', email: '', password: '', phone: '', vehicle_number: '', license_number: '' });
+      setNewDriverVehicles([]);
       fetchDrivers();
     } catch (error: any) {
       console.error('Error adding driver:', error);
@@ -219,6 +264,101 @@ const AdminDrivers = () => {
       toast.error(error.message || 'Failed to update driver');
     } finally {
       setSavingEdit(false);
+    }
+  };
+
+  const fetchVehicleTypes = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('vehicle_types' as any)
+        .select('id, name, display_name, description')
+        .eq('is_active', true)
+        .order('sort_order');
+
+      if (error) throw error;
+      setVehicleTypes(data || []);
+    } catch (error) {
+      console.error('Error fetching vehicle types:', error);
+      toast.error('Failed to load vehicle types');
+    }
+  };
+
+  const handleManageVehicles = async (driver: DriverData) => {
+    setManagingDriver(driver);
+    
+    // Fetch available vehicle types if not already loaded
+    if (vehicleTypes.length === 0) {
+      await fetchVehicleTypes();
+    }
+
+    // Fetch driver's current vehicles
+    try {
+      const { data, error } = await supabase
+        .from('driver_vehicles' as any)
+        .select('vehicle_type_id')
+        .eq('driver_id', driver.id);
+
+      if (error) throw error;
+      
+      const vehicleIds = (data || []).map((v: any) => v.vehicle_type_id);
+      setSelectedDriverVehicles(vehicleIds);
+    } catch (error) {
+      console.error('Error fetching driver vehicles:', error);
+      setSelectedDriverVehicles([]);
+    }
+
+    setIsVehicleDialogOpen(true);
+  };
+
+  const toggleDriverVehicle = (vehicleId: string) => {
+    setSelectedDriverVehicles(prev => {
+      if (prev.includes(vehicleId)) {
+        return prev.filter(id => id !== vehicleId);
+      } else {
+        return [...prev, vehicleId];
+      }
+    });
+  };
+
+  const handleSaveVehicles = async () => {
+    if (!managingDriver) return;
+
+    if (selectedDriverVehicles.length === 0) {
+      toast.error('Please select at least one vehicle type');
+      return;
+    }
+
+    setSavingVehicles(true);
+    try {
+      // Delete existing vehicle assignments
+      const { error: deleteError } = await supabase
+        .from('driver_vehicles' as any)
+        .delete()
+        .eq('driver_id', managingDriver.id);
+
+      if (deleteError) throw deleteError;
+
+      // Insert new vehicle assignments
+      const insertData = selectedDriverVehicles.map((vehicleId, index) => ({
+        driver_id: managingDriver.id,
+        vehicle_type_id: vehicleId,
+        is_primary: index === 0
+      }));
+
+      const { error: insertError } = await supabase
+        .from('driver_vehicles' as any)
+        .insert(insertData);
+
+      if (insertError) throw insertError;
+
+      toast.success('Vehicle assignments updated successfully');
+      setIsVehicleDialogOpen(false);
+      setManagingDriver(null);
+    } catch (error: any) {
+      console.error('Error saving vehicle assignments:', error);
+      toast.error(error.message || 'Failed to update vehicle assignments');
+    } finally {
+      setSavingVehicles(false);
     }
   };
 
@@ -291,13 +431,24 @@ const AdminDrivers = () => {
       key: 'actions', 
       header: '',
       render: (item: DriverData) => (
-        <Button 
-          variant="ghost" 
-          size="icon"
-          onClick={() => handleEditDriver(item)}
-        >
-          <Edit className="w-4 h-4" />
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button 
+            variant="ghost" 
+            size="icon"
+            onClick={() => handleManageVehicles(item)}
+            title="Manage Vehicles"
+          >
+            <Settings className="w-4 h-4" />
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="icon"
+            onClick={() => handleEditDriver(item)}
+            title="Edit Driver"
+          >
+            <Edit className="w-4 h-4" />
+          </Button>
+        </div>
       )
     },
   ];
@@ -327,7 +478,19 @@ const AdminDrivers = () => {
             <p className="text-muted-foreground">Manage all registered drivers</p>
           </div>
           
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+          <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
+            setIsAddDialogOpen(open);
+            if (open) {
+              // Load vehicle types when opening
+              if (vehicleTypes.length === 0) {
+                fetchVehicleTypes();
+              }
+            } else {
+              // Clear form when closing
+              setNewDriver({ full_name: '', email: '', password: '', phone: '', vehicle_number: '', license_number: '' });
+              setNewDriverVehicles([]);
+            }
+          }}>
             <DialogTrigger asChild>
               <Button variant="hero">
                 <Plus className="w-4 h-4" />
@@ -390,9 +553,63 @@ const AdminDrivers = () => {
                     onChange={(e) => setNewDriver(prev => ({ ...prev, license_number: e.target.value }))}
                   />
                 </div>
+
+                {/* Vehicle Types Selection */}
+                <div className="space-y-2">
+                  <Label>Vehicle Types * (Select all vehicles driver can operate)</Label>
+                  {vehicleTypes.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Loading vehicle types...</p>
+                  ) : (
+                    <div className="space-y-2 max-h-[200px] overflow-y-auto border rounded-lg p-3">
+                      {vehicleTypes.map((vehicle) => (
+                        <label
+                          key={vehicle.id}
+                          className={`flex items-start gap-3 p-2 rounded-md cursor-pointer transition-all ${
+                            newDriverVehicles.includes(vehicle.id)
+                              ? 'bg-primary/10 border border-primary'
+                              : 'hover:bg-accent border border-transparent'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={newDriverVehicles.includes(vehicle.id)}
+                            onChange={() => {
+                              setNewDriverVehicles(prev => 
+                                prev.includes(vehicle.id)
+                                  ? prev.filter(id => id !== vehicle.id)
+                                  : [...prev, vehicle.id]
+                              );
+                            }}
+                            disabled={addingDriver}
+                            className="mt-1 w-4 h-4 text-primary rounded focus:ring-primary"
+                          />
+                          <div className="flex-1">
+                            <div className="font-medium text-sm">{vehicle.display_name}</div>
+                            {vehicle.description && (
+                              <div className="text-xs text-muted-foreground">{vehicle.description}</div>
+                            )}
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                  {newDriverVehicles.length > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      {newDriverVehicles.length} vehicle{newDriverVehicles.length !== 1 ? 's' : ''} selected
+                    </p>
+                  )}
+                </div>
                 
                 <div className="flex gap-3 pt-4">
-                  <Button variant="outline" className="flex-1" onClick={() => setIsAddDialogOpen(false)}>
+                  <Button 
+                    variant="outline" 
+                    className="flex-1" 
+                    onClick={() => {
+                      setIsAddDialogOpen(false);
+                      setNewDriver({ full_name: '', email: '', password: '', phone: '', vehicle_number: '', license_number: '' });
+                      setNewDriverVehicles([]);
+                    }}
+                  >
                     Cancel
                   </Button>
                   <Button 
@@ -484,6 +701,78 @@ const AdminDrivers = () => {
                   disabled={savingEdit}
                 >
                   {savingEdit ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save Changes'}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Manage Vehicles Dialog */}
+        <Dialog open={isVehicleDialogOpen} onOpenChange={setIsVehicleDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Manage Vehicle Types</DialogTitle>
+              <DialogDescription>
+                Assign vehicle types to {managingDriver?.full_name}
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-4 mt-4">
+              {vehicleTypes.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  No vehicle types available
+                </p>
+              ) : (
+                <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                  {vehicleTypes.map((vehicle) => (
+                    <label
+                      key={vehicle.id}
+                      className={`flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                        selectedDriverVehicles.includes(vehicle.id)
+                          ? 'border-primary bg-primary/5'
+                          : 'border-border hover:border-primary/50'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedDriverVehicles.includes(vehicle.id)}
+                        onChange={() => toggleDriverVehicle(vehicle.id)}
+                        disabled={savingVehicles}
+                        className="mt-1 w-4 h-4 text-primary rounded focus:ring-primary"
+                      />
+                      <div className="flex-1">
+                        <div className="font-medium text-foreground">{vehicle.display_name}</div>
+                        {vehicle.description && (
+                          <div className="text-sm text-muted-foreground mt-0.5">{vehicle.description}</div>
+                        )}
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              )}
+
+              {selectedDriverVehicles.length > 0 && (
+                <p className="text-sm text-muted-foreground">
+                  {selectedDriverVehicles.length} vehicle{selectedDriverVehicles.length !== 1 ? 's' : ''} selected
+                </p>
+              )}
+
+              <div className="flex gap-3 pt-4">
+                <Button 
+                  variant="outline" 
+                  className="flex-1" 
+                  onClick={() => setIsVehicleDialogOpen(false)}
+                  disabled={savingVehicles}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  variant="hero" 
+                  className="flex-1" 
+                  onClick={handleSaveVehicles}
+                  disabled={savingVehicles || selectedDriverVehicles.length === 0}
+                >
+                  {savingVehicles ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save Changes'}
                 </Button>
               </div>
             </div>

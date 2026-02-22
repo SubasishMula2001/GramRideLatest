@@ -25,9 +25,17 @@ const Navbar: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handleSignOut = async () => {
-    await signOut();
-    // Navigate to login page - state is cleared by signOut
-    navigate('/login', { replace: true });
+    try {
+      await signOut();
+      // Small delay to ensure state is cleared before navigation
+      setTimeout(() => {
+        navigate('/login', { replace: true });
+      }, 100);
+    } catch (error) {
+      console.error('Sign out error:', error);
+      // Navigate anyway
+      navigate('/login', { replace: true });
+    }
   };
 
   const isActive = (path: string) => location.pathname === path;

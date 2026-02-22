@@ -133,14 +133,19 @@ export function isNightTime(date: Date = new Date()): boolean {
  * @param distanceKm - Distance in kilometers
  * @param scheduledTime - Optional scheduled time (for pre-checking night charges)
  * @param nightChargesEnabled - Whether night charges are enabled (from settings)
+ * @param perKmRate - Optional custom per-km rate (defaults to FARE_CONFIG)
+ * @param baseFare - Optional custom base fare (defaults to FARE_CONFIG minimum)
  * @returns Fare breakdown
  */
 export function calculateFare(
   distanceKm: number,
   scheduledTime?: Date,
-  nightChargesEnabledOverride?: boolean
+  nightChargesEnabledOverride?: boolean,
+  perKmRate?: number,
+  minimumBaseFare?: number
 ): {
   baseFare: number;
+  distanceFare: number;
   nightCharge: number;
   surgeCharge: number;
   totalFare: number;
@@ -158,12 +163,20 @@ export function calculateFare(
     ? nightChargesEnabledOverride 
     : (nightChargesEnabled ?? false);
   
-  // Calculate base fare (distance × rate)
-  let baseFare = Math.round(distanceKm * FARE_CONFIG.perKmRate);
+  // Use custom rates if provided, otherwise use config defaults
+  const ratePerKm = perKmRate || FARE_CONFIG.perKmRate;
+  const minFare = minimumBaseFare || FARE_CONFIG.minimumFare;
   
-  // Apply minimum fare
-  if (baseFare < FARE_CONFIG.minimumFare) {
-    baseFare = FARE_CONFIG.minimumFare;
+  // Calculate distance fare (distance × rate)
+  let distanceFare = Math.round(distanceKm * ratePerKm);
+  
+  // Calculate base fare (base + distance)
+  let baseFare = minFare + distanceFare;
+  
+  // Apply minimum fare if total is less
+  if (baseFare < minFare) {
+    baseFare = minFare;
+    distanceFare = 0;
   }
   
   // Calculate night charge only if enabled and it's night time
@@ -180,7 +193,8 @@ export function calculateFare(
   const totalFare = baseFare + nightCharge + surgeCharge;
   
   return {
-    baseFare,
+    baseFare: minFare,
+    distanceFare,
     nightCharge,
     surgeCharge,
     totalFare,

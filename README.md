@@ -62,12 +62,24 @@ This project is built with:
 
 ## How can I deploy this project?
 
+### Deploy to Vercel (Recommended - 100% Free)
+
+1. **Push your code to GitHub**
+2. **Import to Vercel** at https://vercel.com/new
+3. **Add environment variables** (Supabase URL and key)
+4. **Deploy!**
+
+**📖 Full guide**: See [VERCEL_DEPLOYMENT.md](./VERCEL_DEPLOYMENT.md) for complete step-by-step instructions.
+
+### Alternative: Deploy with Lovable
+
 Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
 
-## Can I connect a custom domain to my Lovable project?
+## Can I connect a custom domain?
 
-Yes, you can!
+Yes! Both Vercel and Lovable support custom domains:
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+- **Vercel**: Navigate to Project Settings > Domains
+- **Lovable**: Navigate to Project > Settings > Domains and click Connect Domain
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+Free `.vercel.app` subdomain is provided automatically with Vercel.

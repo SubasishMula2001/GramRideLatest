@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Users, Package, Shield, Clock, MapPin, Smartphone, Car, TrendingUp } from 'lucide-react';
+import { Users, Package, Shield, Clock, MapPin, Smartphone, Car, TrendingUp, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import GramRideLogo from '@/components/GramRideLogo';
 import BookingTypeCard from '@/components/BookingTypeCard';
@@ -10,12 +10,23 @@ import LanguageToggle from '@/components/LanguageToggle';
 import PendingRideBanner from '@/components/PendingRideBanner';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+
+interface VehicleType {
+  id: string;
+  name: string;
+  display_name: string;
+  description: string | null;
+  image_url: string | null;
+}
 
 const Index = () => {
   const navigate = useNavigate();
   const { user, signOut, userRole } = useAuth();
   const { t, language } = useLanguage();
+  const [vehicleTypes, setVehicleTypes] = useState<VehicleType[]>([]);
+  const [loadingVehicleTypes, setLoadingVehicleTypes] = useState(true);
 
   const handleLogout = async () => {
     try {
@@ -98,6 +109,52 @@ const Index = () => {
 
   const txt = pageText[language];
 
+  // Fetch vehicle types from database
+  useEffect(() => {
+    fetchVehicleTypes();
+
+    // Subscribe to real-time updates for vehicle types
+    const channel = supabase
+      .channel('vehicle_types_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Listen to all events (INSERT, UPDATE, DELETE)
+          schema: 'public',
+          table: 'vehicle_types'
+        },
+        () => {
+          // Refetch vehicle types when any change occurs
+          fetchVehicleTypes();
+        }
+      )
+      .subscribe();
+
+    // Cleanup subscription on unmount
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const fetchVehicleTypes = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('vehicle_types' as any)
+        .select('id, name, display_name, description, image_url')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
+
+      if (error) throw error;
+      setVehicleTypes((data as unknown as VehicleType[]) || []);
+    } catch (error) {
+      console.error('Error fetching vehicle types:', error);
+      // Fallback to empty array if fetch fails
+      setVehicleTypes([]);
+    } finally {
+      setLoadingVehicleTypes(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-hero pt-16">
 
@@ -142,21 +199,35 @@ const Index = () => {
           </div>
 
           {/* Booking Type Selection */}
-          <div className="max-w-2xl mx-auto mt-16 grid md:grid-cols-2 gap-4">
-            <BookingTypeCard
-              icon={Users}
-              title={txt.passengerToto}
-              description={txt.passengerDesc}
-              onClick={() => navigate('/book')}
-              variant="passenger"
-            />
-            <BookingTypeCard
-              icon={Package}
-              title={txt.goodsToto}
-              description={txt.goodsDesc}
-              onClick={() => navigate('/book')}
-              variant="goods"
-            />
+          <div className="max-w-2xl mx-auto mt-16">
+            {loadingVehicleTypes ? (
+              <div className="text-center py-8">
+                <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
+                <p className="text-muted-foreground mt-2">
+                  {language === 'bn' ? 'গাড়ির ধরন লোড হচ্ছে...' : 'Loading vehicle types...'}
+                </p>
+              </div>
+            ) : vehicleTypes.length > 0 ? (
+              <div className="grid md:grid-cols-2 gap-4">
+                {vehicleTypes.map((vehicle) => (
+                  <BookingTypeCard
+                    key={vehicle.id}
+                    icon={vehicle.name === 'bike' ? Car : vehicle.name === 'van' ? Package : Users}
+                    title={vehicle.display_name}
+                    description={vehicle.description || ''}
+                    onClick={() => navigate('/book')}
+                    variant={vehicle.name === 'van' || vehicle.name === 'bike' ? 'goods' : 'passenger'}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <Car className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground">
+                  {language === 'bn' ? 'কোন গাড়ি পাওয়া যায়নি' : 'No vehicles available'}
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </section>

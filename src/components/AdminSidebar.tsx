@@ -11,6 +11,8 @@ const navItems = [
   { path: '/admin/live', emoji: '🔴', label: 'Live Monitor' },
   { path: '/admin/users', emoji: '👥', label: 'Users' },
   { path: '/admin/drivers', emoji: '🚗', label: 'Drivers' },
+  { path: '/admin/vehicles', emoji: '🚙', label: 'Vehicles' },
+  { path: '/admin/zones', emoji: '🗺️', label: 'Zones' },
   { path: '/admin/rides', emoji: '🛣️', label: 'Rides' },
   { path: '/admin/promo-codes', emoji: '🎫', label: 'Promo Codes' },
   { path: '/admin/payouts', emoji: '💰', label: 'Driver Payouts' },
@@ -45,8 +47,17 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
   };
 
   const handleLogout = async () => {
-    await signOut();
-    navigate('/login');
+    try {
+      await signOut();
+      // Small delay to ensure state is cleared
+      setTimeout(() => {
+        navigate('/login', { replace: true });
+      }, 100);
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Navigate anyway
+      navigate('/login', { replace: true });
+    }
   };
 
   return (

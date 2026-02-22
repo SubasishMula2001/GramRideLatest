@@ -20,16 +20,27 @@ const licenseSchema = z.string()
   .max(20, 'License number must be less than 20 characters')
   .regex(/^[A-Z0-9]+$/i, 'Only letters and numbers allowed');
 
+interface VehicleType {
+  id: string;
+  name: string;
+  display_name: string;
+  description: string | null;
+  image_url: string | null;
+}
+
 const DriverRegistration = () => {
   const navigate = useNavigate();
   const { user, userRole, loading: authLoading } = useAuth();
   
   const [vehicleNumber, setVehicleNumber] = useState('');
-  const [vehicleType, setVehicleType] = useState('toto');
+  const [vehicleType, setVehicleType] = useState('');
+  const [selectedVehicles, setSelectedVehicles] = useState<string[]>([]);
   const [licenseNumber, setLicenseNumber] = useState('');
   const [loading, setLoading] = useState(false);
   const [checkingStatus, setCheckingStatus] = useState(true);
-  const [errors, setErrors] = useState<{ vehicleNumber?: string; licenseNumber?: string }>({});
+  const [vehicleTypes, setVehicleTypes] = useState<VehicleType[]>([]);
+  const [loadingVehicleTypes, setLoadingVehicleTypes] = useState(true);
+  const [errors, setErrors] = useState<{ vehicleNumber?: string; licenseNumber?: string; vehicles?: string }>({});
 
   useEffect(() => {
     if (!authLoading) {
@@ -41,7 +52,59 @@ const DriverRegistration = () => {
       // Check if user already has a driver record
       checkExistingDriver();
     }
+    
+    // Fetch vehicle types
+    fetchVehicleTypes();
   }, [user, authLoading, navigate]);
+
+  // Real-time subscription for vehicle types changes
+  useEffect(() => {
+    // Subscribe to real-time updates for vehicle types
+    const channel = supabase
+      .channel('vehicle_types_changes_driver')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Listen to all events (INSERT, UPDATE, DELETE)
+          schema: 'public',
+          table: 'vehicle_types'
+        },
+        () => {
+          // Refetch vehicle types when any change occurs
+          fetchVehicleTypes();
+        }
+      )
+      .subscribe();
+
+    // Cleanup subscription on unmount
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const fetchVehicleTypes = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('vehicle_types' as any)
+        .select('id, name, display_name, description, image_url')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
+
+      if (error) throw error;
+      
+      setVehicleTypes((data as unknown as VehicleType[]) || []);
+      
+      // Set default vehicle type if available
+      if (data && data.length > 0 && !vehicleType) {
+        setVehicleType((data as any)[0].name);
+      }
+    } catch (error) {
+      console.error('Error fetching vehicle types:', error);
+      toast.error('Failed to load vehicle types');
+    } finally {
+      setLoadingVehicleTypes(false);
+    }
+  };
 
   const checkExistingDriver = async () => {
     if (!user) return;
@@ -71,7 +134,7 @@ const DriverRegistration = () => {
   };
 
   const validateForm = () => {
-    const newErrors: { vehicleNumber?: string; licenseNumber?: string } = {};
+    const newErrors: { vehicleNumber?: string; licenseNumber?: string; vehicles?: string } = {};
     
     try {
       vehicleNumberSchema.parse(vehicleNumber.trim());
@@ -89,8 +152,26 @@ const DriverRegistration = () => {
       }
     }
 
+    if (selectedVehicles.length === 0) {
+      newErrors.vehicles = 'Please select at least one vehicle type';
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
+  };
+
+  const toggleVehicleSelection = (vehicleId: string) => {
+    setSelectedVehicles(prev => {
+      if (prev.includes(vehicleId)) {
+        return prev.filter(id => id !== vehicleId);
+      } else {
+        return [...prev, vehicleId];
+      }
+    });
+    // Clear error when user selects vehicle
+    if (errors.vehicles) {
+      setErrors(prev => ({ ...prev, vehicles: undefined }));
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -101,18 +182,39 @@ const DriverRegistration = () => {
     setLoading(true);
     
     try {
-      const { error } = await supabase
+      // Insert driver record (keep first selected vehicle as primary for backward compatibility)
+      const primaryVehicle = vehicleTypes.find(v => v.id === selectedVehicles[0]);
+      
+      const { data: driverData, error: driverError } = await supabase
         .from('drivers')
         .insert({
           user_id: user.id,
           vehicle_number: vehicleNumber.trim().toUpperCase(),
-          vehicle_type: vehicleType,
+          vehicle_type: primaryVehicle?.name || 'toto',
           license_number: licenseNumber.trim().toUpperCase(),
           is_verified: false,
           is_available: false
-        });
+        })
+        .select()
+        .single();
 
-      if (error) throw error;
+      if (driverError) throw driverError;
+
+      // Insert all selected vehicles into driver_vehicles junction table
+      const vehicleInserts = selectedVehicles.map((vehicleId, index) => ({
+        driver_id: driverData.id,
+        vehicle_type_id: vehicleId,
+        is_primary: index === 0 // First vehicle is primary
+      }));
+
+      const { error: vehiclesError } = await supabase
+        .from('driver_vehicles' as any)
+        .insert(vehicleInserts);
+
+      if (vehiclesError) {
+        console.error('Error inserting vehicle types:', vehiclesError);
+        // Don't fail the registration, just log the error
+      }
 
       toast.success('Registration submitted! Awaiting admin verification.');
       navigate('/driver');
@@ -128,7 +230,7 @@ const DriverRegistration = () => {
     }
   };
 
-  if (authLoading || checkingStatus) {
+  if (authLoading || checkingStatus || loadingVehicleTypes) {
     return (
       <div className="min-h-screen bg-gradient-hero flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -204,22 +306,47 @@ const DriverRegistration = () => {
                 )}
               </div>
 
-              {/* Vehicle Type */}
+              {/* Vehicle Types */}
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Vehicle Type *
+                <label className="block text-sm font-medium text-foreground mb-3">
+                  Vehicle Types * (Select all vehicles you can drive)
                 </label>
-                <Select value={vehicleType} onValueChange={setVehicleType} disabled={loading}>
-                  <SelectTrigger className="h-12 text-base rounded-xl border-2">
-                    <SelectValue placeholder="Select vehicle type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="toto">Toto (Electric Rickshaw)</SelectItem>
-                    <SelectItem value="auto">Auto Rickshaw</SelectItem>
-                    <SelectItem value="van">Van</SelectItem>
-                    <SelectItem value="bike">Motorcycle</SelectItem>
-                  </SelectContent>
-                </Select>
+                {vehicleTypes.length === 0 ? (
+                  <p className="text-destructive text-sm">
+                    No vehicle types available. Please contact admin.
+                  </p>
+                ) : (
+                  <div className="space-y-3 border-2 rounded-xl p-4 bg-background/50">
+                    {vehicleTypes.map((vt) => (
+                      <label
+                        key={vt.id}
+                        className={`flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                          selectedVehicles.includes(vt.id)
+                            ? 'border-primary bg-primary/5'
+                            : 'border-border hover:border-primary/50'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedVehicles.includes(vt.id)}
+                          onChange={() => toggleVehicleSelection(vt.id)}
+                          disabled={loading}
+                          className="mt-1 w-4 h-4 text-primary rounded focus:ring-primary"
+                        />
+                        <div className="flex-1">
+                          <div className="font-medium text-foreground">{vt.display_name}</div>
+                          {vt.description && (
+                            <div className="text-sm text-muted-foreground mt-0.5">{vt.description}</div>
+                          )}
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                )}
+                {errors.vehicles && (
+                  <p className="text-destructive text-sm mt-1">{errors.vehicles}
+                  </p>
+                )}
               </div>
 
               {/* License Number */}
@@ -281,3 +408,4 @@ const DriverRegistration = () => {
 };
 
 export default DriverRegistration;
+

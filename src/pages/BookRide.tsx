@@ -10,6 +10,7 @@ import SecureRouteMap from '@/components/SecureRouteMap';
 import RatingModal from '@/components/RatingModal';
 import ScheduleRideModal from '@/components/ScheduleRideModal';
 import PaymentModal from '@/components/PaymentModal';
+import FareEstimationCard from '@/components/FareEstimationCard';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -31,6 +32,16 @@ const cleanPlusCode = (address: string): string => {
 type BookingType = 'passenger' | 'goods' | null;
 type BookingStep = 'type' | 'location' | 'confirm' | 'searching' | 'booked' | 'in_progress' | 'completed';
 // Payment method selection moved to driver side
+
+interface VehicleType {
+  id: string;
+  name: string;
+  display_name: string;
+  description: string | null;
+  image_url: string | null;
+  base_fare: number;
+  per_km_rate: number;
+}
 
 interface DriverInfo {
   id: string;
@@ -62,6 +73,8 @@ const BookRide = () => {
   const [dropData, setDropData] = useState<LocationData>({ address: '' });
   const [loading, setLoading] = useState(false);
   const [rideId, setRideId] = useState<string | null>(null);
+  const [vehicleTypes, setVehicleTypes] = useState<VehicleType[]>([]);
+  const [loadingVehicleTypes, setLoadingVehicleTypes] = useState(true);
   const [driverInfo, setDriverInfo] = useState<DriverInfo | null>(null);
   const [rideOtp, setRideOtp] = useState<string | null>(null);
   const [showRatingModal, setShowRatingModal] = useState(false);
@@ -72,6 +85,8 @@ const BookRide = () => {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   // Payment method selection - user chooses before booking
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'upi' | 'cash' | null>(null);
+  // Selected vehicle type for fare estimation
+  const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
   
   // Route calculated values
   const [estimatedDistance, setEstimatedDistance] = useState(3.5);
@@ -128,6 +143,9 @@ const BookRide = () => {
       // Fetch night charges setting
       fetchNightChargesSetting().then(setNightChargesEnabled);
 
+      // Fetch vehicle types
+      fetchVehicleTypes();
+
       // Check if navigating from pending ride banner
       const state = location.state as { pendingRideId?: string } | null;
       if (state?.pendingRideId) {
@@ -141,6 +159,31 @@ const BookRide = () => {
       }
     }
   }, [user, authLoading, navigate]);
+
+  // Real-time subscription for vehicle types changes
+  useEffect(() => {
+    // Subscribe to real-time updates for vehicle types
+    const channel = supabase
+      .channel('vehicle_types_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Listen to all events (INSERT, UPDATE, DELETE)
+          schema: 'public',
+          table: 'vehicle_types'
+        },
+        () => {
+          // Refetch vehicle types when any change occurs
+          fetchVehicleTypes();
+        }
+      )
+      .subscribe();
+
+    // Cleanup subscription on unmount
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   const loadPendingRide = async (pendingRideId: string) => {
     try {
@@ -184,6 +227,25 @@ const BookRide = () => {
       }
     } catch (error) {
       console.error('Error loading pending ride:', error);
+    }
+  };
+
+  const fetchVehicleTypes = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('vehicle_types' as any)
+        .select('id, name, display_name, description, image_url, base_fare, per_km_rate')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
+
+      if (error) throw error;
+      setVehicleTypes((data as unknown as VehicleType[]) || []);
+    } catch (error) {
+      console.error('Error fetching vehicle types:', error);
+      // Fallback to default types if fetch fails
+      setVehicleTypes([]);
+    } finally {
+      setLoadingVehicleTypes(false);
     }
   };
 
@@ -324,8 +386,30 @@ const BookRide = () => {
       return;
     }
 
+    if (!selectedVehicleId) {
+      toast.error('Please select a vehicle type');
+      return;
+    }
+
     setLoading(true);
     try {
+      // Get selected vehicle details
+      const selectedVehicle = vehicleTypes.find(v => v.id === selectedVehicleId);
+      if (!selectedVehicle) {
+        toast.error('Invalid vehicle selection');
+        setLoading(false);
+        return;
+      }
+
+      // Calculate fare based on selected vehicle
+      const vehicleFare = calculateFare(
+        estimatedDistance,
+        scheduledFor || undefined,
+        nightChargesEnabled,
+        selectedVehicle.per_km_rate,
+        selectedVehicle.base_fare
+      );
+
       // Generate 4-digit OTP for pickup verification using cryptographically secure randomness
       const randomValues = crypto.getRandomValues(new Uint32Array(1));
       const otp = (1000 + (randomValues[0] % 9000)).toString();
@@ -341,13 +425,14 @@ const BookRide = () => {
           pickup_lng: pickupData.lng,
           dropoff_lat: dropData.lat,
           dropoff_lng: dropData.lng,
-          fare: estimatedFare,
+          fare: vehicleFare.totalFare,
           distance_km: estimatedDistance,
           duration_mins: estimatedTime,
           status: 'pending',
           otp: otp,
           payment_status: 'pending',
-          payment_method: selectedPaymentMethod
+          payment_method: selectedPaymentMethod,
+          vehicle_type: selectedVehicle.name // Store selected vehicle type
         })
         .select()
         .single();
@@ -367,9 +452,10 @@ const BookRide = () => {
         details: { 
           ride_id: data.id, 
           ride_type: bookingType,
+          vehicle_type: selectedVehicle.display_name,
           pickup: pickupData.address,
           drop: dropData.address,
-          fare: estimatedFare 
+          fare: vehicleFare.totalFare 
         }
       });
 
@@ -414,20 +500,31 @@ const BookRide = () => {
               </p>
 
               <div className="space-y-4">
-                <BookingTypeCard
-                  icon={Users}
-                  title="Passenger Toto"
-                  description="Safe and comfortable rides for you and your family"
-                  onClick={() => handleTypeSelect('passenger')}
-                  variant="passenger"
-                />
-                <BookingTypeCard
-                  icon={Package}
-                  title="Goods Toto"
-                  description="Reliable delivery for packages and goods"
-                  onClick={() => handleTypeSelect('goods')}
-                  variant="goods"
-                />
+                {loadingVehicleTypes ? (
+                  <div className="text-center py-8">
+                    <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
+                    <p className="text-muted-foreground mt-2">Loading vehicle types...</p>
+                  </div>
+                ) : vehicleTypes.length > 0 ? (
+                  <>
+                    {vehicleTypes.map((vehicle) => (
+                      <BookingTypeCard
+                        key={vehicle.id}
+                        icon={vehicle.name === 'bike' ? Car : vehicle.name === 'van' ? Package : Users}
+                        title={vehicle.display_name}
+                        description={vehicle.description || `Book a ${vehicle.display_name.toLowerCase()}`}
+                        onClick={() => handleTypeSelect('passenger')}
+                        variant={vehicle.name === 'van' || vehicle.name === 'bike' ? 'goods' : 'passenger'}
+                      />
+                    ))}
+                  </>
+                ) : (
+                  <div className="text-center py-8">
+                    <Car className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+                    <h3 className="text-xl font-bold text-foreground mb-2">No Vehicles Available</h3>
+                    <p className="text-muted-foreground">Please check back later or contact support.</p>
+                  </div>
+                )}
                 
                 {/* Shared Rides Link */}
                 <Link to="/shared-rides" className="block">
@@ -535,7 +632,7 @@ const BookRide = () => {
                 </div>
 
                 {/* Locations */}
-                <div className="space-y-4 mb-6">
+                <div className="space-y-4">
                   <div className="flex items-start gap-3">
                     <div className="mt-1 p-1.5 rounded-full bg-primary/10">
                       <Navigation className="w-4 h-4 text-primary" />
@@ -556,44 +653,23 @@ const BookRide = () => {
                     </div>
                   </div>
                 </div>
-
-                {/* Fare Estimate */}
-                <div className="bg-muted/50 rounded-xl p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Estimated Distance</span>
-                    <span className="font-semibold text-foreground">{estimatedDistance} km</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Estimated Time</span>
-                    <span className="font-semibold text-foreground flex items-center gap-1">
-                      <Clock className="w-4 h-4" />
-                      {estimatedTime} min
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Rate</span>
-                    <span className="text-foreground">₹{FARE_CONFIG.perKmRate}/km</span>
-                  </div>
-                  {fareBreakdown.isNight && (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground flex items-center gap-1">
-                        <span>🌙</span> Night Charge (+{FARE_CONFIG.nightChargePercent}%)
-                      </span>
-                      <span className="text-secondary font-medium">+₹{fareBreakdown.nightCharge}</span>
-                    </div>
-                  )}
-                  <div className="border-t border-border pt-3 flex items-center justify-between">
-                    <span className="font-medium text-foreground">Estimated Fare</span>
-                    <span className="text-xl font-bold text-primary flex items-center">
-                      <IndianRupee className="w-5 h-5" />
-                      {estimatedFare}
-                    </span>
-                  </div>
-                </div>
               </div>
 
+              {/* Fare Estimation with Multiple Vehicle Options */}
+              {vehicleTypes.length > 0 && (
+                <FareEstimationCard
+                  vehicleTypes={vehicleTypes}
+                  distance={estimatedDistance}
+                  estimatedTime={estimatedTime}
+                  selectedVehicleId={selectedVehicleId}
+                  onSelectVehicle={setSelectedVehicleId}
+                  scheduledFor={scheduledFor || undefined}
+                  nightChargesEnabled={nightChargesEnabled}
+                />
+              )}
+
               {/* Payment Method Selection */}
-              <div className="bg-gradient-card rounded-2xl border border-border/50 p-6 shadow-elevated mb-6">
+              <div className="bg-gradient-card rounded-2xl border border-border/50 p-6 shadow-elevated mb-6 mt-6">
                 <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
                   <CreditCard className="w-5 h-5 text-primary" />
                   Select Payment Method
@@ -657,10 +733,12 @@ const BookRide = () => {
                 size="xl" 
                 className="w-full"
                 onClick={handleConfirmBooking}
-                disabled={loading || !selectedPaymentMethod}
+                disabled={loading || !selectedPaymentMethod || !selectedVehicleId}
               >
                 {loading ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
+                ) : !selectedVehicleId ? (
+                  'Select a Vehicle'
                 ) : !selectedPaymentMethod ? (
                   'Select Payment Method'
                 ) : (

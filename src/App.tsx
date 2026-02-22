@@ -19,6 +19,8 @@ import Login from "./pages/Login";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminUsers from "./pages/admin/AdminUsers";
 import AdminDrivers from "./pages/admin/AdminDrivers";
+import AdminVehicles from "./pages/admin/AdminVehicles";
+import AdminZones from "./pages/admin/AdminZones";
 import AdminRides from "./pages/admin/AdminRides";
 import AdminLogs from "./pages/admin/AdminLogs";
 import AdminReports from "./pages/admin/AdminReports";
@@ -106,6 +108,16 @@ const App = () => (
             <Route path="/admin/drivers" element={
               <ProtectedRoute allowedRoles={['admin']}>
                 <AdminDrivers />
+              </ProtectedRoute>
+            } />
+            <Route path="/admin/vehicles" element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <AdminVehicles />
+              </ProtectedRoute>
+            } />
+            <Route path="/admin/zones" element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <AdminZones />
               </ProtectedRoute>
             } />
             <Route path="/admin/rides" element={

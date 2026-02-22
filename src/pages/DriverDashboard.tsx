@@ -33,6 +33,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import GramRideLogo from '@/components/GramRideLogo';
 import RideCard from '@/components/RideCard';
 import SecureRouteMap from '@/components/SecureRouteMap';
+import QuickMessageTemplates from '@/components/QuickMessageTemplates';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -1326,6 +1327,12 @@ const DriverDashboard = () => {
                       <Locate className="w-4 h-4 mr-2" />
                       Navigate to {activeRide.status === 'accepted' ? 'Pickup' : 'Drop-off'}
                     </Button>
+
+                    {/* Quick Message Templates */}
+                    <QuickMessageTemplates
+                      customerPhone={activeRide.user_phone}
+                      customerName={activeRide.user_name}
+                    />
 
                     <AnimatePresence mode="wait">
                       {activeRide.status === 'accepted' ? (
