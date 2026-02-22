@@ -64,6 +64,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     let isMounted = true;
+    let loadingTimeout: NodeJS.Timeout;
+
+    // Safety timeout - if loading takes more than 5 seconds, stop loading anyway
+    loadingTimeout = setTimeout(() => {
+      if (isMounted) {
+        console.warn('Auth loading timeout - forcing loaded state');
+        setLoading(false);
+      }
+    }, 5000);
 
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -76,6 +85,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setUser(null);
           setUserRole(null);
           roleCache.current = null;
+          if (isMounted) setLoading(false);
           return;
         }
 
@@ -91,7 +101,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               return;
             }
           } catch {
-            // Recovery failed, proceed with logout
+            // Recovery failed, clear session
             setSession(null);
             setUser(null);
             setUserRole(null);
@@ -106,29 +116,63 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Force refresh role on new sign in, use cache for token refresh
         if (session?.user) {
           const forceRefresh = event === 'SIGNED_IN';
-          const role = await fetchUserRole(session.user.id, forceRefresh);
-          if (isMounted) setUserRole(role);
+          try {
+            const role = await fetchUserRole(session.user.id, forceRefresh);
+            if (isMounted) setUserRole(role);
+          } catch (error) {
+            console.error('Error fetching role on auth change:', error);
+            if (isMounted) setUserRole(null);
+          }
         }
       }
     );
 
-    // THEN check for existing session
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (!isMounted) return;
-      
-      setSession(session);
-      setUser(session?.user ?? null);
-      
-      if (session?.user) {
-        const role = await fetchUserRole(session.user.id);
-        if (isMounted) setUserRole(role);
+    // THEN check for existing session with timeout protection
+    const initializeAuth = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('Session error:', error);
+          // Clear invalid session
+          await supabase.auth.signOut({ scope: 'local' });
+          setSession(null);
+          setUser(null);
+          setUserRole(null);
+          roleCache.current = null;
+          if (isMounted) setLoading(false);
+          return;
+        }
+
+        if (!isMounted) return;
+        
+        setSession(session);
+        setUser(session?.user ?? null);
+        
+        if (session?.user) {
+          try {
+            const role = await fetchUserRole(session.user.id);
+            if (isMounted) setUserRole(role);
+          } catch (error) {
+            console.error('Error fetching role:', error);
+            if (isMounted) setUserRole(null);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to initialize auth:', error);
+      } finally {
+        if (isMounted) {
+          clearTimeout(loadingTimeout);
+          setLoading(false);
+        }
       }
-      
-      setLoading(false);
-    });
+    };
+
+    initializeAuth();
 
     return () => {
       isMounted = false;
+      clearTimeout(loadingTimeout);
       subscription.unsubscribe();
     };
   }, []);
