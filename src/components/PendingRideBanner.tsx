@@ -48,33 +48,22 @@ const PendingRideBanner: React.FC = () => {
     }
 
     const fetchRides = async () => {
-      // Fetch pending ride
-      const { data: pending } = await supabase
+      // Fetch both in a single query with OR filter for better performance
+      const { data: rides } = await supabase
         .from('rides')
         .select('id, pickup_location, dropoff_location, fare, ride_type, created_at, driver_id, status, payment_status')
         .eq('user_id', user.id)
-        .eq('status', 'pending')
+        .or('status.eq.pending,and(status.eq.completed,payment_status.neq.completed)')
         .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .limit(5); // Get a few recent rides
 
-      if (pending) {
-        setPendingRide(pending);
-      }
-
-      // Fetch unpaid completed ride
-      const { data: unpaid } = await supabase
-        .from('rides')
-        .select('id, pickup_location, dropoff_location, fare, ride_type, created_at, driver_id, status, payment_status')
-        .eq('user_id', user.id)
-        .eq('status', 'completed')
-        .neq('payment_status', 'completed')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (unpaid) {
-        setUnpaidRide(unpaid);
+      if (rides && rides.length > 0) {
+        // Find pending and unpaid separately from the result
+        const pending = rides.find(r => r.status === 'pending');
+        const unpaid = rides.find(r => r.status === 'completed' && r.payment_status !== 'completed');
+        
+        if (pending) setPendingRide(pending);
+        if (unpaid) setUnpaidRide(unpaid);
       }
 
       setLoading(false);

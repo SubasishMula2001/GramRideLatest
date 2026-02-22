@@ -109,32 +109,34 @@ const Index = () => {
 
   const txt = pageText[language];
 
-  // Fetch vehicle types from database
+  // Fetch vehicle types from database (non-blocking)
   useEffect(() => {
+    // Start fetch immediately but don't block render
     fetchVehicleTypes();
 
-    // Subscribe to real-time updates for vehicle types
-    const channel = supabase
-      .channel('vehicle_types_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*', // Listen to all events (INSERT, UPDATE, DELETE)
-          schema: 'public',
-          table: 'vehicle_types'
-        },
-        () => {
-          // Refetch vehicle types when any change occurs
-          fetchVehicleTypes();
-        }
-      )
-      .subscribe();
+    // Only subscribe to real-time if user is logged in (admins might update)
+    let channel: any = null;
+    if (user) {
+      channel = supabase
+        .channel('vehicle_types_changes')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'vehicle_types'
+          },
+          () => {
+            fetchVehicleTypes();
+          }
+        )
+        .subscribe();
+    }
 
-    // Cleanup subscription on unmount
     return () => {
-      supabase.removeChannel(channel);
+      if (channel) supabase.removeChannel(channel);
     };
-  }, []);
+  }, [user]);
 
   const fetchVehicleTypes = async () => {
     try {

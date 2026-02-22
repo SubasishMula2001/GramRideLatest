@@ -31,7 +31,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState<'admin' | 'user' | 'driver' | null>(null);
 
+  // Cache to avoid refetching role unnecessarily
+  const roleCache = React.useRef<{ userId: string; role: 'admin' | 'user' | 'driver' | null } | null>(null);
+
   const fetchUserRole = async (userId: string) => {
+    // Return cached role if available
+    if (roleCache.current?.userId === userId) {
+      return roleCache.current.role;
+    }
+
     try {
       const { data, error } = await supabase
         .from('user_roles')
@@ -44,7 +52,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return null;
       }
 
-      return data?.role as 'admin' | 'user' | 'driver' | null;
+      const role = data?.role as 'admin' | 'user' | 'driver' | null;
+      // Cache the result
+      roleCache.current = { userId, role };
+      return role;
     } catch (error) {
       console.error('Error fetching user role:', error);
       return null;
@@ -52,20 +63,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
+    let isMounted = true;
+
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        if (!isMounted) return;
+
         // If session expired/invalid, try to recover before logging out
         if (!session && (event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED')) {
           try {
             const { data } = await supabase.auth.getSession();
-            if (data.session) {
-              // Session recovered, use it
+            if (data.session && isMounted) {
               setSession(data.session);
               setUser(data.session.user);
-              setTimeout(() => {
-                fetchUserRole(data.session!.user.id).then(setUserRole);
-              }, 0);
+              const role = await fetchUserRole(data.session.user.id);
+              if (isMounted) setUserRole(role);
               return;
             }
           } catch {
@@ -76,30 +89,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setSession(session);
         setUser(session?.user ?? null);
         
-        // Defer role fetching with setTimeout to avoid deadlock
-        if (session?.user) {
-          setTimeout(() => {
-            fetchUserRole(session.user.id).then(setUserRole);
-          }, 0);
-        } else {
+        // Fetch role only for new sessions
+        if (session?.user && event !== 'TOKEN_REFRESHED') {
+          const role = await fetchUserRole(session.user.id);
+          if (isMounted) setUserRole(role);
+        } else if (!session) {
           setUserRole(null);
+          roleCache.current = null; // Clear cache on logout
         }
       }
     );
 
     // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!isMounted) return;
+      
       setSession(session);
       setUser(session?.user ?? null);
       
       if (session?.user) {
-        fetchUserRole(session.user.id).then(setUserRole);
+        const role = await fetchUserRole(session.user.id);
+        if (isMounted) setUserRole(role);
       }
       
       setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signUp = async (email: string, password: string, fullName: string, role: 'user' | 'driver' = 'user') => {
