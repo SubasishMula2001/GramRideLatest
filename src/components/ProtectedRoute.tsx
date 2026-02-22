@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
@@ -16,6 +16,26 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 }) => {
   const { user, loading, userRole } = useAuth();
   const location = useLocation();
+  const [roleLoadTimeout, setRoleLoadTimeout] = useState(false);
+
+  // Add timeout for role loading (3 seconds)
+  useEffect(() => {
+    if (allowedRoles && user && userRole === null && !loading) {
+      const timer = setTimeout(() => {
+        console.warn('Role loading timeout - redirecting to home');
+        setRoleLoadTimeout(true);
+      }, 3000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [allowedRoles, user, userRole, loading]);
+
+  // Reset timeout when role is loaded
+  useEffect(() => {
+    if (userRole !== null) {
+      setRoleLoadTimeout(false);
+    }
+  }, [userRole]);
 
   if (loading) {
     return (
@@ -30,12 +50,20 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   }
 
   // Wait for role to be fetched if allowedRoles is specified
-  if (allowedRoles && userRole === null) {
+  // But timeout after 3 seconds to prevent infinite loading
+  if (allowedRoles && userRole === null && !roleLoadTimeout) {
     return (
       <div className="min-h-screen bg-gradient-hero flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <p className="text-muted-foreground ml-2">Loading your profile...</p>
       </div>
     );
+  }
+
+  // If role loading timed out, redirect to home
+  if (allowedRoles && userRole === null && roleLoadTimeout) {
+    console.error('Role not loaded - redirecting to home');
+    return <Navigate to="/" replace />;
   }
 
   if (allowedRoles && userRole && !allowedRoles.includes(userRole)) {
