@@ -146,7 +146,16 @@ const Index = () => {
         .eq('is_active', true)
         .order('sort_order', { ascending: true });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching vehicle types:', error);
+        // If table doesn't exist yet, use default fallback
+        if (error.code === 'PGRST116' || error.message?.includes('does not exist')) {
+          setVehicleTypes([]);
+          setLoadingVehicleTypes(false);
+          return;
+        }
+        throw error;
+      }
       setVehicleTypes((data as unknown as VehicleType[]) || []);
     } catch (error) {
       console.error('Error fetching vehicle types:', error);
@@ -200,16 +209,9 @@ const Index = () => {
             </div>
           </div>
 
-          {/* Booking Type Selection */}
-          <div className="max-w-2xl mx-auto mt-16">
-            {loadingVehicleTypes ? (
-              <div className="text-center py-8">
-                <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
-                <p className="text-muted-foreground mt-2">
-                  {language === 'bn' ? 'গাড়ির ধরন লোড হচ্ছে...' : 'Loading vehicle types...'}
-                </p>
-              </div>
-            ) : vehicleTypes.length > 0 ? (
+          {/* Booking Type Selection - Only show if vehicle types are loaded or available */}
+          {!loadingVehicleTypes && vehicleTypes.length > 0 && (
+            <div className="max-w-2xl mx-auto mt-16">
               <div className="grid md:grid-cols-2 gap-4">
                 {vehicleTypes.map((vehicle) => (
                   <BookingTypeCard
@@ -222,15 +224,8 @@ const Index = () => {
                   />
                 ))}
               </div>
-            ) : (
-              <div className="text-center py-8">
-                <Car className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground">
-                  {language === 'bn' ? 'কোন গাড়ি পাওয়া যায়নি' : 'No vehicles available'}
-                </p>
-              </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </section>
 
